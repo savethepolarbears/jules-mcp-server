@@ -1,8 +1,17 @@
 # Jules MCP Server
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green)](https://nodejs.org/)
+[![MCP](https://img.shields.io/badge/MCP-1.0.4-purple)](https://modelcontextprotocol.io/)
+
 A production-ready **Model Context Protocol (MCP)** server for the Google Jules API, enabling autonomous coding tasks and scheduling directly from AI assistants like Claude.
 
 > **⚠️ DISCLAIMER**: This is an **independent, open-source project** and is **NOT officially created, maintained, or endorsed by Google**. This server is a community-driven integration with the public Jules API. Use at your own risk. For official Jules documentation, visit [jules.google](https://jules.google).
+
+## 🌟 Star This Repository
+
+If you find this useful, please star ⭐ the repository to help others discover it!
 
 ## Overview
 
