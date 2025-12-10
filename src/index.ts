@@ -33,7 +33,8 @@ import { JulesPromptManager, JULES_PROMPTS } from './mcp/prompts.js';
 import { RepositoryValidator } from './utils/security.js';
 
 /**
- * Main server class
+ * Main server class for the Jules MCP server.
+ * Handles the initialization of components and setup of MCP request handlers.
  */
 class JulesMCPServer {
   private server: Server;
@@ -44,6 +45,10 @@ class JulesMCPServer {
   private tools: JulesTools;
   private promptManager: JulesPromptManager;
 
+  /**
+   * Initializes the Jules MCP Server.
+   * Sets up the server, client, storage, scheduler, resources, tools, and prompts.
+   */
   constructor() {
     // Initialize security validator with environment config
     RepositoryValidator.initialize();
@@ -94,7 +99,8 @@ class JulesMCPServer {
   }
 
   /**
-   * Sets up MCP protocol handlers
+   * Sets up MCP protocol handlers.
+   * Configures handlers for listing and reading resources, tools, and prompts.
    */
   private setupHandlers(): void {
     // Resource handlers
@@ -403,7 +409,8 @@ class JulesMCPServer {
   }
 
   /**
-   * Starts the MCP server
+   * Starts the MCP server.
+   * Connects the transport and initializes the scheduler.
    */
   async start(): Promise<void> {
     // Create stdio transport

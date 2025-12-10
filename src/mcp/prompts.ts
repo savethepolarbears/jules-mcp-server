@@ -3,17 +3,30 @@
  * Prompts help users leverage Jules effectively with best practices
  */
 
+/**
+ * Interface for a prompt template.
+ */
 export interface PromptTemplate {
+  /** The name of the prompt template. */
   name: string;
+  /** A description of what the prompt template does. */
   description: string;
+  /** A list of arguments required by the template. */
   arguments: Array<{
+    /** The name of the argument. */
     name: string;
+    /** A description of the argument. */
     description: string;
+    /** Whether the argument is required. */
     required: boolean;
   }>;
+  /** A function that takes a map of arguments and returns the rendered prompt string. */
   template: (args: Record<string, string>) => string;
 }
 
+/**
+ * A list of available Jules prompt templates.
+ */
 export const JULES_PROMPTS: PromptTemplate[] = [
   {
     name: 'refactor_module',
@@ -176,15 +189,34 @@ For recurring updates, use schedule_recurring_task with cron "0 9 * * 1" (Monday
   },
 ];
 
+/**
+ * Manages the retrieval and rendering of Jules prompts.
+ */
 export class JulesPromptManager {
+  /**
+   * Retrieves a prompt template by name.
+   * @param name - The name of the prompt template.
+   * @returns The prompt template if found, otherwise undefined.
+   */
   getPrompt(name: string): PromptTemplate | undefined {
     return JULES_PROMPTS.find((p) => p.name === name);
   }
 
+  /**
+   * Lists all available prompt templates.
+   * @returns An array of all prompt templates.
+   */
   listPrompts(): PromptTemplate[] {
     return JULES_PROMPTS;
   }
 
+  /**
+   * Renders a prompt template with the provided arguments.
+   * @param name - The name of the prompt template to render.
+   * @param args - The arguments to populate the template with.
+   * @returns The rendered prompt string.
+   * @throws Error if the prompt is not found or if required arguments are missing.
+   */
   renderPrompt(name: string, args: Record<string, string>): string {
     const prompt = this.getPrompt(name);
     if (!prompt) {

@@ -9,12 +9,21 @@ import type { JulesClient } from '../api/jules-client.js';
 import type { ScheduleStorage } from '../storage/schedule-store.js';
 import { retryWithBackoff } from '../utils/security.js';
 
+/**
+ * Manages the scheduling and execution of cron jobs for Jules tasks.
+ */
 export class CronEngine {
   private jobs: Map<string, Job> = new Map();
   private readonly storage: ScheduleStorage;
   private readonly julesClient: JulesClient;
   private readonly logger: (message: string) => void;
 
+  /**
+   * Creates an instance of CronEngine.
+   * @param storage - The storage instance for scheduled tasks.
+   * @param julesClient - The client for interacting with the Jules API.
+   * @param logger - The logger function to use (defaults to console.log).
+   */
   constructor(
     storage: ScheduleStorage,
     julesClient: JulesClient,
@@ -26,7 +35,8 @@ export class CronEngine {
   }
 
   /**
-   * Hydrates all schedules from storage on startup
+   * Hydrates all schedules from storage on startup.
+   * Loads tasks from storage and schedules them if enabled.
    */
   async initialize(): Promise<void> {
     const tasks = await this.storage.listTasks();
@@ -49,7 +59,9 @@ export class CronEngine {
   }
 
   /**
-   * Validates a cron expression
+   * Validates a cron expression.
+   * @param expression - The cron expression to validate.
+   * @returns True if the expression is valid, false otherwise.
    */
   static validateCronExpression(expression: string): boolean {
     try {
@@ -69,7 +81,10 @@ export class CronEngine {
   }
 
   /**
-   * Schedules a task in memory
+   * Schedules a task in memory.
+   * Cancels any existing job for the task ID before scheduling.
+   * @param task - The task to schedule.
+   * @throws Error if the schedule creation fails.
    */
   scheduleTask(task: ScheduledTask): void {
     // Cancel existing job if present
@@ -127,7 +142,8 @@ export class CronEngine {
   }
 
   /**
-   * Cancels a scheduled task
+   * Cancels a scheduled task.
+   * @param taskId - The ID of the task to cancel.
    */
   cancelTask(taskId: string): void {
     const job = this.jobs.get(taskId);
@@ -138,7 +154,9 @@ export class CronEngine {
   }
 
   /**
-   * Gets the next scheduled execution time for a task
+   * Gets the next scheduled execution time for a task.
+   * @param taskId - The ID of the task.
+   * @returns The next invocation date, or null if the task is not scheduled.
    */
   getNextInvocation(taskId: string): Date | null {
     const job = this.jobs.get(taskId);
@@ -149,7 +167,8 @@ export class CronEngine {
   }
 
   /**
-   * Reschedules a task (useful when cron expression changes)
+   * Reschedules a task (useful when cron expression changes).
+   * @param task - The task to reschedule.
    */
   async rescheduleTask(task: ScheduledTask): Promise<void> {
     this.cancelTask(task.id);
@@ -157,7 +176,7 @@ export class CronEngine {
   }
 
   /**
-   * Cancels all jobs and shuts down scheduler
+   * Cancels all jobs and shuts down scheduler.
    */
   shutdown(): void {
     this.logger('Shutting down scheduler...');

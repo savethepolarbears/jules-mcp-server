@@ -10,18 +10,26 @@ import { homedir } from 'os';
 import { join } from 'path';
 import type { ScheduledTask, ScheduleStore } from '../types/schedule.js';
 
+/**
+ * Handles persistence of scheduled tasks to the local file system.
+ */
 export class ScheduleStorage {
   private readonly storagePath: string;
   private readonly storageDir: string;
   private cache: ScheduleStore | null = null;
 
+  /**
+   * Creates an instance of ScheduleStorage.
+   * Initializes paths for storage directory and file.
+   */
   constructor() {
     this.storageDir = join(homedir(), '.jules-mcp');
     this.storagePath = join(this.storageDir, 'schedules.json');
   }
 
   /**
-   * Ensures storage directory exists
+   * Ensures storage directory exists.
+   * Creates the directory if it doesn't exist.
    */
   private async ensureStorageDir(): Promise<void> {
     if (!existsSync(this.storageDir)) {
@@ -30,7 +38,10 @@ export class ScheduleStorage {
   }
 
   /**
-   * Loads schedules from disk
+   * Loads schedules from disk.
+   * If storage file doesn't exist, initializes an empty store.
+   * @returns The loaded schedule store.
+   * @throws Error if loading fails.
    */
   async load(): Promise<ScheduleStore> {
     if (this.cache) {
@@ -61,7 +72,9 @@ export class ScheduleStorage {
   }
 
   /**
-   * Saves schedules to disk
+   * Saves schedules to disk.
+   * @param store - The schedule store to save.
+   * @throws Error if saving fails.
    */
   async save(store: ScheduleStore): Promise<void> {
     await this.ensureStorageDir();
@@ -78,7 +91,8 @@ export class ScheduleStorage {
   }
 
   /**
-   * Adds or updates a scheduled task
+   * Adds or updates a scheduled task.
+   * @param task - The task to upsert.
    */
   async upsertTask(task: ScheduledTask): Promise<void> {
     const store = await this.load();
@@ -87,7 +101,9 @@ export class ScheduleStorage {
   }
 
   /**
-   * Retrieves a specific task by ID
+   * Retrieves a specific task by ID.
+   * @param id - The ID of the task.
+   * @returns The task if found, otherwise undefined.
    */
   async getTask(id: string): Promise<ScheduledTask | undefined> {
     const store = await this.load();
@@ -95,7 +111,9 @@ export class ScheduleStorage {
   }
 
   /**
-   * Retrieves a task by name
+   * Retrieves a task by name.
+   * @param name - The name of the task.
+   * @returns The task if found, otherwise undefined.
    */
   async getTaskByName(name: string): Promise<ScheduledTask | undefined> {
     const store = await this.load();
@@ -103,7 +121,8 @@ export class ScheduleStorage {
   }
 
   /**
-   * Lists all tasks
+   * Lists all tasks.
+   * @returns An array of all scheduled tasks.
    */
   async listTasks(): Promise<ScheduledTask[]> {
     const store = await this.load();
@@ -111,7 +130,9 @@ export class ScheduleStorage {
   }
 
   /**
-   * Deletes a task by ID
+   * Deletes a task by ID.
+   * @param id - The ID of the task to delete.
+   * @returns True if the task was deleted, false if it wasn't found.
    */
   async deleteTask(id: string): Promise<boolean> {
     const store = await this.load();
@@ -124,7 +145,10 @@ export class ScheduleStorage {
   }
 
   /**
-   * Updates the last run information for a task
+   * Updates the last run information for a task.
+   * @param id - The ID of the task.
+   * @param timestamp - The timestamp of the run.
+   * @param sessionId - The session ID of the run (optional).
    */
   async updateLastRun(
     id: string,
@@ -141,7 +165,7 @@ export class ScheduleStorage {
   }
 
   /**
-   * Clears the cache, forcing a reload on next access
+   * Clears the cache, forcing a reload on next access.
    */
   invalidateCache(): void {
     this.cache = null;

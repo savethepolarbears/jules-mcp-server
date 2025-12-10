@@ -8,6 +8,9 @@ import type { ScheduleStorage } from '../storage/schedule-store.js';
 import type { CronEngine } from '../scheduler/cron-engine.js';
 import { smartTruncate } from '../utils/security.js';
 
+/**
+ * Manages the exposure of Jules resources via the MCP protocol.
+ */
 export class JulesResources {
   constructor(
     private readonly client: JulesClient,
@@ -17,7 +20,8 @@ export class JulesResources {
 
   /**
    * Resource: jules://sources
-   * Returns a list of all connected GitHub repositories
+   * Returns a list of all connected GitHub repositories.
+   * @returns A JSON string representing the connected sources.
    */
   async getSources(): Promise<string> {
     const response = await this.client.listSources();
@@ -44,7 +48,8 @@ export class JulesResources {
 
   /**
    * Resource: jules://sessions/list
-   * Returns a summary of recent sessions
+   * Returns a summary of recent sessions.
+   * @returns A JSON string representing a summary of recent sessions.
    */
   async getSessionsList(): Promise<string> {
     const response = await this.client.listSessions(50);
@@ -71,7 +76,9 @@ export class JulesResources {
 
   /**
    * Resource: jules://sessions/{id}/full
-   * Returns complete session details including activities
+   * Returns complete session details including activities.
+   * @param sessionId - The ID of the session to retrieve.
+   * @returns A JSON string representing the full session details.
    */
   async getSessionFull(sessionId: string): Promise<string> {
     // Fetch session and activities in parallel
@@ -144,7 +151,8 @@ export class JulesResources {
 
   /**
    * Resource: jules://schedules
-   * Returns all locally-managed scheduled tasks
+   * Returns all locally-managed scheduled tasks.
+   * @returns A JSON string representing all scheduled tasks.
    */
   async getSchedules(): Promise<string> {
     const tasks = await this.storage.listTasks();
@@ -177,7 +185,8 @@ export class JulesResources {
 
   /**
    * Resource: jules://schedules/history
-   * Returns execution history of scheduled tasks
+   * Returns execution history of scheduled tasks.
+   * @returns A JSON string representing the execution history of scheduled tasks.
    */
   async getScheduleHistory(): Promise<string> {
     const tasks = await this.storage.listTasks();
