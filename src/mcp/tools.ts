@@ -120,6 +120,9 @@ export const DeleteScheduleSchema = z.object({
   task_name: z.string().describe('Name of the scheduled task to delete'),
 });
 
+/**
+ * Manages the available tools for the Jules MCP server.
+ */
 export class JulesTools {
   constructor(
     private readonly client: JulesClient,
@@ -128,7 +131,10 @@ export class JulesTools {
   ) {}
 
   /**
-   * Helper: Execute tool with consistent error handling
+   * Helper: Execute tool with consistent error handling.
+   * @param operation - The async operation to execute.
+   * @param successTransform - Optional function to transform the result on success.
+   * @returns A JSON string representing the result or error.
    */
   private async executeWithErrorHandling<T>(
     operation: () => Promise<T>,
@@ -153,7 +159,9 @@ export class JulesTools {
 
   /**
    * Tool: create_coding_task
-   * Creates an immediate Jules session
+   * Creates an immediate Jules session.
+   * @param args - The arguments for creating a coding task.
+   * @returns A JSON string representing the created session details.
    */
   async createCodingTask(
     args: z.infer<typeof CreateTaskSchema>
@@ -192,7 +200,9 @@ export class JulesTools {
 
   /**
    * Tool: manage_session
-   * Manages session lifecycle (approve plan, send feedback)
+   * Manages session lifecycle (approve plan, send feedback).
+   * @param args - The arguments for managing a session.
+   * @returns A JSON string representing the result of the action.
    */
   async manageSession(
     args: z.infer<typeof ManageSessionSchema>
@@ -227,7 +237,9 @@ export class JulesTools {
 
   /**
    * Tool: get_session_status
-   * Polls for session status and returns current state
+   * Polls for session status and returns current state.
+   * @param args - The arguments for getting session status.
+   * @returns A JSON string representing the session status.
    */
   async getSessionStatus(
     args: z.infer<typeof GetSessionStatusSchema>
@@ -249,7 +261,9 @@ export class JulesTools {
 
   /**
    * Tool: schedule_recurring_task
-   * Schedules a task to run on a cron schedule
+   * Schedules a task to run on a cron schedule.
+   * @param args - The arguments for scheduling a task.
+   * @returns A JSON string representing the scheduling result.
    */
   async scheduleRecurringTask(
     args: z.infer<typeof ScheduleTaskSchema>
@@ -309,7 +323,8 @@ export class JulesTools {
 
   /**
    * Tool: list_schedules
-   * Returns all active schedules
+   * Returns all active schedules.
+   * @returns A JSON string representing all active schedules.
    */
   async listSchedules(): Promise<string> {
     return this.executeWithErrorHandling(async () => {
@@ -339,7 +354,9 @@ export class JulesTools {
 
   /**
    * Tool: delete_schedule
-   * Removes a scheduled task
+   * Removes a scheduled task.
+   * @param args - The arguments for deleting a schedule.
+   * @returns A JSON string representing the deletion result.
    */
   async deleteSchedule(
     args: z.infer<typeof DeleteScheduleSchema>
@@ -364,7 +381,9 @@ export class JulesTools {
   }
 
   /**
-   * Helper: Provides guidance based on session state
+   * Helper: Provides guidance based on session state.
+   * @param state - The current state of the session.
+   * @returns A string describing the next steps.
    */
   private getNextStepsForState(state: string): string {
     const stateGuide: Record<string, string> = {

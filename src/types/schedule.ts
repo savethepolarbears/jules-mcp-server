@@ -4,6 +4,9 @@
  * since the Jules API does not natively support scheduling.
  */
 
+/**
+ * Payload for a task to be sent to the Jules API.
+ */
 export interface TaskPayload {
   /** The natural language instruction for Jules */
   prompt: string;
@@ -19,6 +22,9 @@ export interface TaskPayload {
   title?: string;
 }
 
+/**
+ * Represents a scheduled task with its metadata and payload.
+ */
 export interface ScheduledTask {
   /** Unique identifier (UUID) */
   id: string;
@@ -40,6 +46,9 @@ export interface ScheduledTask {
   enabled: boolean;
 }
 
+/**
+ * Schema for the schedule store file.
+ */
 export interface ScheduleStore {
   /** Map of schedule ID to ScheduledTask */
   schedules: Record<string, ScheduledTask>;

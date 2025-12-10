@@ -20,6 +20,7 @@ export class RepositoryValidator {
 
   /**
    * Validates that a repository is allowed to be accessed
+   * @param source - The source repository string in the format "sources/github/owner/repo"
    * @throws Error if repository is not in allowlist
    */
   static validateRepository(source: string): void {
@@ -49,6 +50,7 @@ export class RepositoryValidator {
 
   /**
    * Check if allowlist is configured
+   * @returns True if an allowlist is configured, false otherwise
    */
   static isAllowlistEnabled(): boolean {
     return this.allowedRepos !== null && this.allowedRepos.length > 0;
@@ -56,6 +58,7 @@ export class RepositoryValidator {
 
   /**
    * Get the list of allowed repositories
+   * @returns The list of allowed repositories, or null if no allowlist is configured
    */
   static getAllowedRepositories(): string[] | null {
     return this.allowedRepos;
@@ -64,6 +67,9 @@ export class RepositoryValidator {
 
 /**
  * Utility for safe string truncation at word boundaries
+ * @param text - The text to truncate
+ * @param maxLength - The maximum length of the string
+ * @returns The truncated string, with "..." appended if it was truncated
  */
 export function smartTruncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) {
@@ -84,6 +90,11 @@ export function smartTruncate(text: string, maxLength: number): string {
 
 /**
  * Retry an async operation with exponential backoff
+ * @param fn - The async function to retry
+ * @param maxRetries - The maximum number of retries (default: 3)
+ * @param baseDelay - The base delay in milliseconds (default: 1000)
+ * @returns A promise that resolves with the result of the function
+ * @throws The last error encountered if all retries fail
  */
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
