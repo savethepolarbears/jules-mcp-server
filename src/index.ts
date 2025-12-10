@@ -431,7 +431,16 @@ class JulesMCPServer {
     await this.server.connect(transport);
 
     // Initialize scheduler after transport is ready so logging works
-    await this.scheduler.initialize();
+    try {
+      await this.scheduler.initialize();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.server.sendLoggingMessage({
+        level: 'error',
+        data: `Scheduler initialization failed: ${message}`,
+      });
+    }
 
     // Log startup
     this.server.sendLoggingMessage({

@@ -44,3 +44,13 @@ GEMINI.md
 
 # User data - Schedules are local to each user
 .jules-mcp/
+
+# Research and design documents - Not needed for users
+docs/
+*.docx
+*.pdf
+
+# Project management files - User-specific
+Context.md
+Context/
+.contextkit/

@@ -59,6 +59,19 @@ export JULES_API_KEY="your-key-here"
 npm start
 ```
 
+### Quick smoke test (MCP stdio)
+
+After building and setting `JULES_API_KEY`, you can validate the server end-to-end:
+
+```bash
+npm run mcp:smoke
+```
+
+Expected output (with a valid key):
+- Lists 6 tools, 5 prompts, and the 4 core resources
+- Attempts to read a fake session ID and reports a Jules 404 (proves real API calls work)
+- Attempts a tool call with dummy data and reports the API error without crashing
+
 ### Global Installation (Recommended)
 
 ```bash

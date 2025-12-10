@@ -40,6 +40,8 @@ export class JulesAPIError extends Error {
 export class JulesClient {
   private readonly baseURL = 'https://jules.googleapis.com/v1alpha';
   private readonly apiKey: string;
+  private readonly timeoutMs: number;
+  private readonly maxRetries: number;
 
   /**
    * Creates an instance of JulesClient.
@@ -54,6 +56,8 @@ export class JulesClient {
           'Generate a key at https://jules.google/settings'
       );
     }
+    this.timeoutMs = Number(process.env.JULES_API_TIMEOUT_MS || 15000);
+    this.maxRetries = Number(process.env.JULES_API_MAX_RETRIES || 2);
   }
 
   /**
@@ -74,30 +78,65 @@ export class JulesClient {
       ...options.headers,
     };
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      });
+    let attempt = 0;
+    let lastError: unknown;
 
-      if (!response.ok) {
-        const errorBody = await response.text();
+    while (attempt <= this.maxRetries) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorBody = await response.text();
+          // Retry on transient 5xx
+          if (response.status >= 500 && attempt < this.maxRetries) {
+            attempt++;
+            lastError = new JulesAPIError(
+              `Jules API error: ${response.statusText}`,
+              response.status,
+              errorBody
+            );
+            continue;
+          }
+          throw new JulesAPIError(
+            `Jules API error: ${response.statusText}`,
+            response.status,
+            errorBody
+          );
+        }
+
+        return (await response.json()) as T;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        const isAbort =
+          error instanceof Error && error.name === 'AbortError';
+        if ((isAbort || error instanceof Error) && attempt < this.maxRetries) {
+          attempt++;
+          lastError = error;
+          continue;
+        }
+        if (error instanceof JulesAPIError) {
+          throw error;
+        }
         throw new JulesAPIError(
-          `Jules API error: ${response.statusText}`,
-          response.status,
-          errorBody
+          `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
       }
-
-      return (await response.json()) as T;
-    } catch (error) {
-      if (error instanceof JulesAPIError) {
-        throw error;
-      }
-      throw new JulesAPIError(
-        `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
     }
+
+    // Exhausted retries
+    throw new JulesAPIError(
+      `Network error after ${this.maxRetries + 1} attempts: ${
+        lastError instanceof Error ? lastError.message : 'Unknown error'
+      }`
+    );
   }
 
   /**
