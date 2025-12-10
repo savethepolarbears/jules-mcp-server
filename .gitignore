@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment - NEVER commit API keys!
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Claude Code specific files - Contains user-specific configuration
+.claude/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+
+# Future integration folders
+.genkit/
+
+# User data - Schedules are local to each user
+.jules-mcp/
