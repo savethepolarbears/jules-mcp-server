@@ -1,12 +1,22 @@
 /**
- * Security utilities for repository access control and validation
+ * Security utilities for repository access control and validation.
  */
 
+/**
+ * Validates repository access based on an optional allowlist.
+ * Ensures that operations are only performed on authorized repositories.
+ */
 export class RepositoryValidator {
+  /**
+   * The list of allowed repositories, or null if no allowlist is configured.
+   */
   private static allowedRepos: string[] | null = null;
 
   /**
-   * Initialize the validator with allowed repositories from environment
+   * Initializes the validator with allowed repositories from the environment.
+   * Reads the JULES_ALLOWED_REPOS environment variable to set up the allowlist.
+   *
+   * @returns {void} No return value.
    */
   static initialize(): void {
     const allowList = process.env.JULES_ALLOWED_REPOS;
@@ -19,9 +29,11 @@ export class RepositoryValidator {
   }
 
   /**
-   * Validates that a repository is allowed to be accessed
+   * Validates that a repository is allowed to be accessed.
+   *
    * @param source - The source repository string in the format "sources/github/owner/repo"
-   * @throws Error if repository is not in allowlist
+   * @returns {void} No return value.
+   * @throws {Error} if the source format is invalid or if the repository is not in the allowlist.
    */
   static validateRepository(source: string): void {
     // If no allowlist configured, allow all
@@ -49,16 +61,18 @@ export class RepositoryValidator {
   }
 
   /**
-   * Check if allowlist is configured
-   * @returns True if an allowlist is configured, false otherwise
+   * Checks if an allowlist is currently configured and enabled.
+   *
+   * @returns {boolean} True if an allowlist is configured, false otherwise.
    */
   static isAllowlistEnabled(): boolean {
     return this.allowedRepos !== null && this.allowedRepos.length > 0;
   }
 
   /**
-   * Get the list of allowed repositories
-   * @returns The list of allowed repositories, or null if no allowlist is configured
+   * Gets the list of currently allowed repositories.
+   *
+   * @returns {string[] | null} The list of allowed repositories, or null if no allowlist is configured.
    */
   static getAllowedRepositories(): string[] | null {
     return this.allowedRepos;
@@ -66,10 +80,12 @@ export class RepositoryValidator {
 }
 
 /**
- * Utility for safe string truncation at word boundaries
- * @param text - The text to truncate
- * @param maxLength - The maximum length of the string
- * @returns The truncated string, with "..." appended if it was truncated
+ * Utility for safe string truncation at word boundaries.
+ * Truncates text to a specified maximum length, prioritizing breaking at spaces to avoid cutting words in half.
+ *
+ * @param text - The text to truncate.
+ * @param maxLength - The maximum length of the string.
+ * @returns {string} The truncated string, with "..." appended if it was truncated.
  */
 export function smartTruncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) {
@@ -89,12 +105,14 @@ export function smartTruncate(text: string, maxLength: number): string {
 }
 
 /**
- * Retry an async operation with exponential backoff
- * @param fn - The async function to retry
- * @param maxRetries - The maximum number of retries (default: 3)
- * @param baseDelay - The base delay in milliseconds (default: 1000)
- * @returns A promise that resolves with the result of the function
- * @throws The last error encountered if all retries fail
+ * Retries an asynchronous operation with exponential backoff.
+ *
+ * @template T
+ * @param fn - The async function to retry.
+ * @param maxRetries - The maximum number of retries. Defaults to 3.
+ * @param baseDelay - The base delay in milliseconds. Defaults to 1000.
+ * @returns {Promise<T>} A promise that resolves with the result of the function.
+ * @throws {Error} The last error encountered if all retries fail.
  */
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
