@@ -4,7 +4,7 @@
  * Storage location: ~/.jules-mcp/schedules.json
  */
 
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, rename, copyFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -40,8 +40,9 @@ export class ScheduleStorage {
   /**
    * Loads schedules from disk.
    * If storage file doesn't exist, initializes an empty store.
+   * If the file contains invalid JSON, it creates a backup and initializes an empty store.
    * @returns The loaded schedule store.
-   * @throws Error if loading fails.
+   * @throws Error if loading fails for non-ENOENT reasons and isn't a JSON parse error.
    */
   async load(): Promise<ScheduleStore> {
     if (this.cache) {
@@ -50,21 +51,41 @@ export class ScheduleStorage {
 
     await this.ensureStorageDir();
 
-    if (!existsSync(this.storagePath)) {
-      // Initialize empty store
-      const emptyStore: ScheduleStore = {
-        schedules: {},
-        version: '1.0.0',
-      };
-      await this.save(emptyStore);
-      return emptyStore;
-    }
-
     try {
       const data = await readFile(this.storagePath, 'utf-8');
-      this.cache = JSON.parse(data) as ScheduleStore;
-      return this.cache;
-    } catch (error) {
+
+      try {
+        this.cache = JSON.parse(data) as ScheduleStore;
+        return this.cache;
+      } catch (parseError) {
+        // Handle corrupted JSON by backing it up
+        const backupPath = `${this.storagePath}.corrupted.${Date.now()}`;
+        console.error(`Failed to parse schedules.json. Backing up corrupted file to ${backupPath}`);
+        try {
+            await copyFile(this.storagePath, backupPath);
+        } catch (backupError) {
+            console.error(`Failed to backup corrupted file: ${backupError}`);
+        }
+
+        // Return empty store instead of crashing
+        const emptyStore: ScheduleStore = {
+          schedules: {},
+          version: '1.0.0',
+        };
+        this.cache = emptyStore;
+        return emptyStore;
+      }
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        // Initialize empty store
+        const emptyStore: ScheduleStore = {
+          schedules: {},
+          version: '1.0.0',
+        };
+        await this.save(emptyStore);
+        return emptyStore;
+      }
+
       throw new Error(
         `Failed to load schedules from ${this.storagePath}: ${error}`
       );
@@ -72,16 +93,20 @@ export class ScheduleStorage {
   }
 
   /**
-   * Saves schedules to disk.
+   * Saves schedules to disk using atomic writes.
+   * Writes to a temporary file first, then renames it to the target path.
    * @param store - The schedule store to save.
    * @throws Error if saving fails.
    */
   async save(store: ScheduleStore): Promise<void> {
     await this.ensureStorageDir();
 
+    const tempPath = `${this.storagePath}.tmp`;
+
     try {
       const data = JSON.stringify(store, null, 2);
-      await writeFile(this.storagePath, data, 'utf-8');
+      await writeFile(tempPath, data, 'utf-8');
+      await rename(tempPath, this.storagePath);
       this.cache = store;
     } catch (error) {
       throw new Error(

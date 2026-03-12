@@ -60,7 +60,10 @@ Please create a Jules coding task with a detailed prompt that:
 3. Specifies any patterns or conventions to follow
 4. Includes test requirements to verify the refactoring doesn't break functionality
 
-Use the create_coding_task tool with source format: sources/github/${args.repository}`,
+Use the create_coding_task tool with:
+- Source format: sources/github/${args.repository}
+- require_plan_approval: true (Important for safe operation when targeting repos from AI agents like OpenClaw/Codex)
+- auto_create_pr: true`,
   },
 
   {
@@ -86,9 +89,10 @@ Maintenance tasks to include:
 ${args.tasks.split(',').map((task) => `- ${task.trim()}`).join('\n')}
 
 Please use the schedule_recurring_task tool with:
-- Cron expression: "0 3 * * 1" (Every Monday at 3 AM)
+- Cron expression: "0 3 * * 1" (Every Monday at 3 AM. Note: Schedules must be quota-aware and run at most once per hour. Weekly is recommended.)
 - A comprehensive prompt covering all tasks
-- Auto-create PR: true
+- auto_create_pr: true
+- require_plan_approval: true (Recommended for safe AI integration until trust is established)
 - Source: sources/github/${args.repository}
 
 This will create a persistent schedule that survives server restarts.`,
@@ -117,10 +121,11 @@ Please create a Jules task that:
 
 Use create_coding_task with:
 - Source: sources/github/${args.repository}
-- Require plan approval: true (for review before changes)
+- require_plan_approval: true (Crucial for safe operation when targeting repos from AI agents like OpenClaw/Codex)
+- auto_create_pr: true
 - Detailed prompt including all security checks
 
-You may want to schedule this monthly using schedule_recurring_task with cron "0 2 1 * *".`,
+You may want to schedule this monthly using schedule_recurring_task with cron "0 2 1 * *". Remember to keep schedules quota-aware (at most once per hour).`,
   },
 
   {
@@ -152,7 +157,10 @@ Please create a Jules task with this prompt:
 
 Provide a summary of all fixes made."
 
-Use create_coding_task with source: sources/github/${args.repository}`,
+Use create_coding_task with:
+- Source: sources/github/${args.repository}
+- require_plan_approval: true (For safe AI agent integration)
+- auto_create_pr: true`,
   },
 
   {
@@ -182,10 +190,10 @@ Please create a Jules task with this strategy:
 
 Use create_coding_task with:
 - Source: sources/github/${args.repository}
-- Require plan approval: true (to review update strategy)
-- Auto-create PR: true
+- require_plan_approval: true (to review update strategy; important for safe OpenClaw/Codex integration)
+- auto_create_pr: true
 
-For recurring updates, use schedule_recurring_task with cron "0 9 * * 1" (Monday 9 AM).`,
+For recurring updates, use schedule_recurring_task with cron "0 9 * * 1" (Monday 9 AM). Keep cron intervals to at least 1 hour to respect quota limits.`,
   },
 ];
 

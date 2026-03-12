@@ -46,7 +46,7 @@ export class JulesResources {
 
     return JSON.stringify(
       {
-        description: 'Connected GitHub repositories available for Jules tasks',
+        description: 'Connected GitHub repositories available for Jules tasks. Note: For safe integration from AI agents (OpenClaw/Codex), always use require_plan_approval: true when targeting these repos.',
         count: formatted.length,
         sources: formatted,
       },
@@ -76,7 +76,7 @@ export class JulesResources {
 
     return JSON.stringify(
       {
-        description: 'Recent Jules sessions (tasks)',
+        description: 'Recent Jules sessions (tasks). Be mindful of API quotas when querying session history frequently.',
         count: formatted.length,
         sessions: formatted,
       },
@@ -189,7 +189,7 @@ export class JulesResources {
 
     return JSON.stringify(
       {
-        description: 'Locally-managed scheduled Jules tasks',
+        description: 'Locally-managed scheduled Jules tasks. Ensure new schedules are quota-aware (at most once per hour).',
         count: formatted.length,
         schedules: formatted,
       },
