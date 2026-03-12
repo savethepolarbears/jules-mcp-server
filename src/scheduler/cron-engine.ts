@@ -81,12 +81,63 @@ export class CronEngine {
   }
 
   /**
+   * Validates if a cron expression is quota-aware (not too frequent).
+   * Ensures the schedule does not run more often than once per hour
+   * to respect API quotas and safe operation guidelines.
+   * @param expression - The cron expression to validate for frequency.
+   * @returns True if the schedule is safe (>= 1 hour interval), false if too frequent.
+   */
+  static isQuotaAwareSchedule(expression: string): boolean {
+    try {
+      // We parse the expression manually because node-schedule's nextInvocation() might block or not advance properly if called multiple times synchronously without running the job.
+      // node-schedule internally uses cron-parser or a similar mechanism. We can test standard intervals.
+      // A safe way to check frequency without external dependencies is to look at the minute field.
+      const parts = expression.trim().split(/\s+/);
+      if (parts.length < 5 || parts.length > 6) return false;
+
+      // node-schedule supports both 5-part (standard cron: min, hour, dom, month, dow)
+      // and 6-part (with seconds: sec, min, hour, dom, month, dow).
+      // The minute part is at index 0 for 5-part, and index 1 for 6-part.
+      const minutePart = parts.length === 6 ? parts[1] : parts[0];
+
+      // If minute is '*' or contains '*/X' where X < 55, or is a list with items close to each other, it's too frequent.
+      // For simplicity and safety, the most robust check without complex parser logic:
+      // A quota-aware cron should have a specific minute (e.g. '0') or an allowed list/range that guarantees >= 1 hr gap.
+      // We'll enforce that the minute field MUST be a single numeric value between 0-59.
+      // E.g., '0 * * * *' (hourly), '30 9 * * 1' (weekly), '0 0 * * *' (daily)
+      // This strictly prevents '* * * * *' or '*/15 * * * *' or '0,30 * * * *'.
+
+      if (!/^\d+$/.test(minutePart)) {
+         return false;
+      }
+
+      const minute = parseInt(minutePart, 10);
+      if (minute < 0 || minute > 59) {
+          return false;
+      }
+
+      // Also ensure it is actually a valid cron by using node-schedule once.
+      const testJob = schedule.scheduleJob(expression, () => {});
+      if (!testJob) return false;
+      testJob.cancel();
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Schedules a task in memory.
    * Cancels any existing job for the task ID before scheduling.
    * @param task - The task to schedule.
-   * @throws Error if the schedule creation fails.
+   * @throws Error if the schedule creation fails, or if it violates quota guidelines.
    */
   scheduleTask(task: ScheduledTask): void {
+    if (!CronEngine.isQuotaAwareSchedule(task.cron)) {
+      throw new Error(`Schedule '${task.cron}' is too frequent. For safe, quota-aware operation, tasks must run at most once per hour.`);
+    }
+
     // Cancel existing job if present
     this.cancelTask(task.id);
 
