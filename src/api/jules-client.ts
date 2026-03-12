@@ -82,6 +82,11 @@ export class JulesClient {
     let lastError: unknown;
 
     while (attempt <= this.maxRetries) {
+      if (attempt > 0) {
+        const delay = Math.pow(2, attempt - 1) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
@@ -96,15 +101,24 @@ export class JulesClient {
         if (!response.ok) {
           const errorBody = await response.text();
           // Retry on transient 5xx
-          if (response.status >= 500 && attempt < this.maxRetries) {
-            attempt++;
-            lastError = new JulesAPIError(
-              `Jules API error: ${response.statusText}`,
-              response.status,
-              errorBody
-            );
-            continue;
+          if (response.status >= 500) {
+            if (attempt < this.maxRetries) {
+              attempt++;
+              lastError = new JulesAPIError(
+                `Jules API error: ${response.statusText}`,
+                response.status,
+                errorBody
+              );
+              continue;
+            } else {
+              throw new JulesAPIError(
+                `Jules API error: ${response.statusText}`,
+                response.status,
+                errorBody
+              );
+            }
           }
+          // Do not retry on 4xx or other errors
           throw new JulesAPIError(
             `Jules API error: ${response.statusText}`,
             response.status,
@@ -115,16 +129,22 @@ export class JulesClient {
         return (await response.json()) as T;
       } catch (error) {
         clearTimeout(timeoutId);
+
+        // If it's already a JulesAPIError (like a 4xx error thrown above), do not retry it
+        if (error instanceof JulesAPIError) {
+          throw error;
+        }
+
         const isAbort =
           error instanceof Error && error.name === 'AbortError';
+
+        // Only retry network errors and timeouts
         if ((isAbort || error instanceof Error) && attempt < this.maxRetries) {
           attempt++;
           lastError = error;
           continue;
         }
-        if (error instanceof JulesAPIError) {
-          throw error;
-        }
+
         throw new JulesAPIError(
           `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
         );

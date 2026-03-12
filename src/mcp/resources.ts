@@ -63,26 +63,41 @@ export class JulesResources {
    * @returns {Promise<string>} A JSON string representing a summary of recent sessions.
    */
   async getSessionsList(): Promise<string> {
-    const response = await this.client.listSessions(50);
+    try {
+      const response = await this.client.listSessions(50);
 
-    const formatted = response.sessions.map((session) => ({
-      id: session.id,
-      title: session.title || 'Untitled Task',
-      state: session.state || 'UNKNOWN',
-      prompt: smartTruncate(session.prompt, 100),
-      repository: session.sourceContext.source,
-      created: session.createTime,
-    }));
+      const formatted = response.sessions.map((session) => ({
+        id: session.id,
+        title: session.title || 'Untitled Task',
+        state: session.state || 'UNKNOWN',
+        prompt: smartTruncate(session.prompt, 100),
+        repository: session.sourceContext.source,
+        created: session.createTime,
+      }));
 
-    return JSON.stringify(
-      {
-        description: 'Recent Jules sessions (tasks)',
-        count: formatted.length,
-        sessions: formatted,
-      },
-      null,
-      2
-    );
+      return JSON.stringify(
+        {
+          description: 'Recent Jules sessions (tasks)',
+          count: formatted.length,
+          sessions: formatted,
+        },
+        null,
+        2
+      );
+    } catch (error) {
+      return JSON.stringify(
+        {
+          description: 'Recent Jules sessions (tasks)',
+          count: 0,
+          sessions: [],
+          error: error instanceof Error ? error.message : 'Unknown API failure',
+          status: 'degraded',
+          guidance: 'Jules API is currently unreachable. You can try again later.'
+        },
+        null,
+        2
+      );
+    }
   }
 
   /**
@@ -94,72 +109,92 @@ export class JulesResources {
    * @returns {Promise<string>} A JSON string representing the full session details.
    */
   async getSessionFull(sessionId: string): Promise<string> {
-    // Fetch session and activities in parallel
-    const [session, activitiesResponse] = await Promise.all([
-      this.client.getSession(sessionId),
-      this.client.listActivities(sessionId),
-    ]);
+    try {
+      // Fetch session and activities in parallel
+      const [session, activitiesResponse] = await Promise.all([
+        this.client.getSession(sessionId),
+        this.client.listActivities(sessionId),
+      ]);
 
-    // Format activities for readability
-    const formattedActivities = activitiesResponse.activities.map(
-      (activity) => {
-        const base = {
-          type: activity.type,
-          timestamp: activity.timestamp,
-        };
-
-        // Add type-specific details
-        if (activity.planGenerated) {
-          return {
-            ...base,
-            plan: activity.planGenerated.plan,
-            changesPreview: activity.planGenerated.changeSet
-              ? `${activity.planGenerated.changeSet.changes?.length || 0} files`
-              : 'No changes',
+      // Format activities for readability
+      const formattedActivities = activitiesResponse.activities.map(
+        (activity) => {
+          const base = {
+            type: activity.type,
+            timestamp: activity.timestamp,
           };
+
+          // Add type-specific details
+          if (activity.planGenerated) {
+            return {
+              ...base,
+              plan: activity.planGenerated.plan,
+              changesPreview: activity.planGenerated.changeSet
+                ? `${activity.planGenerated.changeSet.changes?.length || 0} files`
+                : 'No changes',
+            };
+          }
+
+          if (activity.progressUpdated) {
+            return {
+              ...base,
+              message: activity.progressUpdated.message,
+              percentage: activity.progressUpdated.percentage,
+            };
+          }
+
+          if (activity.sessionCompleted) {
+            return {
+              ...base,
+              success: activity.sessionCompleted.success,
+              message: activity.sessionCompleted.message,
+              pullRequestUrl: activity.sessionCompleted.pullRequestUrl,
+            };
+          }
+
+          return base;
         }
+      );
 
-        if (activity.progressUpdated) {
-          return {
-            ...base,
-            message: activity.progressUpdated.message,
-            percentage: activity.progressUpdated.percentage,
-          };
-        }
-
-        if (activity.sessionCompleted) {
-          return {
-            ...base,
-            success: activity.sessionCompleted.success,
-            message: activity.sessionCompleted.message,
-            pullRequestUrl: activity.sessionCompleted.pullRequestUrl,
-          };
-        }
-
-        return base;
-      }
-    );
-
-    return JSON.stringify(
-      {
-        session: {
-          id: session.id,
-          title: session.title,
-          state: session.state,
-          prompt: session.prompt,
-          repository: session.sourceContext.source,
-          branch:
-            session.sourceContext.githubRepoContext?.startingBranch || 'main',
-          automationMode: session.automationMode,
-          requirePlanApproval: session.requirePlanApproval,
-          created: session.createTime,
-          updated: session.updateTime,
+      return JSON.stringify(
+        {
+          session: {
+            id: session.id,
+            title: session.title,
+            state: session.state,
+            prompt: session.prompt,
+            repository: session.sourceContext.source,
+            branch:
+              session.sourceContext.githubRepoContext?.startingBranch || 'main',
+            automationMode: session.automationMode,
+            requirePlanApproval: session.requirePlanApproval,
+            created: session.createTime,
+            updated: session.updateTime,
+          },
+          activities: formattedActivities,
         },
-        activities: formattedActivities,
-      },
-      null,
-      2
-    );
+        null,
+        2
+      );
+    } catch (error) {
+      return JSON.stringify(
+        {
+          session: {
+            id: sessionId,
+            state: 'UNKNOWN',
+            title: 'Failed to retrieve session',
+            prompt: 'N/A',
+            repository: 'N/A'
+          },
+          activities: [],
+          error: error instanceof Error ? error.message : 'Unknown API failure',
+          status: 'degraded',
+          guidance: 'Jules API is currently unreachable. Could not fetch session details.'
+        },
+        null,
+        2
+      );
+    }
   }
 
   /**
