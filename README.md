@@ -68,6 +68,7 @@ npm run mcp:smoke
 ```
 
 Expected output (with a valid key):
+
 - Lists 6 tools, 5 prompts, and the 4 core resources
 - Attempts to read a fake session ID and reports a Jules 404 (proves real API calls work)
 - Attempts a tool call with dummy data and reports the API error without crashing
@@ -144,130 +145,61 @@ Once configured, your AI assistant can use Jules through natural language:
 
 ### Creating Immediate Tasks
 
-```
+```text
 "Use Jules to add unit tests for the authentication module in my-app-backend repository"
 ```
 
 The assistant will:
+
 1. Check `jules://sources` to find the repository
 2. Call `create_coding_task` tool with appropriate prompt
 3. Return the session ID for monitoring
 
 ### Scheduling Recurring Tasks
 
-```
+```text
 "Schedule Jules to update dependencies every Monday at 9 AM in my-app-backend"
 ```
 
 The assistant will:
+
 1. Call `schedule_recurring_task` with cron `"0 9 * * 1"`
 2. Save the schedule to `~/.jules-mcp/schedules.json`
 3. Confirm the next execution time
 
 ### Monitoring Progress
 
-```
+```text
 "Check the status of Jules session abc123"
 ```
 
 The assistant will:
+
 1. Call `get_session_status` or read `jules://sessions/abc123/full`
 2. Show current state (PLANNING, IN_PROGRESS, COMPLETED, etc.)
 3. Provide next steps based on state
 
 ### Reviewing and Approving Plans
 
-```
+```text
 "Show me Jules's plan for session abc123 and approve it"
 ```
 
 The assistant will:
+
 1. Read `jules://sessions/abc123/full` to get the plan
 2. Display the plan steps to you
 3. Call `manage_session` with `action=approve_plan` after your confirmation
 
-## Available Resources
+## Documentation
 
-Resources are read-only context that the AI can access:
+Detailed documentation has been moved to the `docs/` folder:
 
-| URI | Description |
-|-----|-------------|
-| `jules://sources` | Connected GitHub repositories |
-| `jules://sessions/list` | Recent Jules sessions |
-| `jules://sessions/{id}/full` | Complete session details with activities |
-| `jules://schedules` | Active scheduled tasks |
-| `jules://schedules/history` | Execution history |
-
-## Available Tools
-
-Tools are actions the AI can execute:
-
-### create_coding_task
-
-Creates an immediate Jules coding session.
-
-**Parameters:**
-- `prompt` (required) - Natural language task instruction
-- `source` (required) - Repository (format: `sources/github/owner/repo`)
-- `branch` (optional) - Target branch (default: `main`)
-- `auto_create_pr` (optional) - Auto-create PR (default: `true`)
-- `require_plan_approval` (optional) - Pause for review (default: `false`)
-- `title` (optional) - Session title
-
-**Returns:** Session ID and monitoring URL
-
-### manage_session
-
-Manage active sessions (approve plans, send feedback).
-
-**Parameters:**
-- `session_id` (required)
-- `action` (required) - `"approve_plan"` or `"send_message"`
-- `message` (optional) - Required for `send_message`
-
-### get_session_status
-
-Check session status and get next steps.
-
-**Parameters:**
-- `session_id` (required)
-
-### schedule_recurring_task
-
-Schedule a task to run on a cron schedule.
-
-**Parameters:**
-- `task_name` (required) - Unique schedule identifier
-- `cron_expression` (required) - Standard cron format
-- `prompt` (required) - Task instruction
-- `source` (required) - Repository resource name
-- `branch`, `auto_create_pr`, `require_plan_approval`, `timezone` (optional)
-
-**Cron Examples:**
-- `"0 9 * * 1"` - Every Monday at 9 AM
-- `"0 2 * * *"` - Every day at 2 AM
-- `"0 0 1 * *"` - First day of each month at midnight
-
-### list_schedules
-
-List all active scheduled tasks with next run times.
-
-### delete_schedule
-
-Remove a scheduled task.
-
-**Parameters:**
-- `task_name` (required)
-
-## Available Prompts
-
-Prompts are templates that guide best practices:
-
-- `refactor_module` - Guided refactoring workflow
-- `setup_weekly_maintenance` - Automated maintenance setup
-- `audit_security` - Comprehensive security audit
-- `fix_failing_tests` - Test failure resolution
-- `update_dependencies` - Dependency update with breaking change handling
+- [API Reference](docs/API_REFERENCE.md) - Complete details on available MCP Tools, Resources, and Prompts.
+- [Architecture](docs/ARCHITECTURE.md) - System design and the "Thick Server" pattern.
+- [Configuration](docs/CONFIGURATION.md) - Environment variables and setup instructions.
+- [Examples](docs/EXAMPLES.md) - Example workflows and usage patterns.
+- [Quickstart](docs/QUICKSTART.md) - A fast guide to getting up and running.
 
 ## Security Considerations
 
@@ -291,7 +223,7 @@ This prevents accidental modifications to production or sensitive repos.
 
 For critical repositories, **always** set `require_plan_approval: true`:
 
-```
+```text
 "Create a task but require plan approval before any code changes"
 ```
 
@@ -315,6 +247,7 @@ All scheduled task executions are logged to `jules://schedules/history`. Review 
 ### "JULES_API_KEY environment variable is required"
 
 Set your API key:
+
 ```bash
 export JULES_API_KEY="your-key-here"
 ```
@@ -339,7 +272,7 @@ npm run typecheck
 
 ### Project Structure
 
-```
+```text
 src/
   types/          # TypeScript type definitions
     jules-api.ts  # Jules API types
@@ -370,7 +303,7 @@ npm run typecheck  # Type checking only
 This server provides complete coverage of the Jules v1alpha API:
 
 | Endpoint | Method | MCP Mapping |
-|----------|--------|-------------|
+| ---------- | -------- | ------------- |
 | `/sources` | GET | Resource: `jules://sources` |
 | `/sources/{name}` | GET | Included in full session resource |
 | `/sessions` | POST | Tool: `create_coding_task` |
@@ -396,10 +329,10 @@ When Jules API adds native scheduling:
 
 ## Resources
 
-- **Jules API Documentation**: https://developers.google.com/jules/api
-- **Jules Web Interface**: https://jules.google
-- **Model Context Protocol**: https://modelcontextprotocol.io
-- **MCP TypeScript SDK**: https://github.com/modelcontextprotocol/typescript-sdk
+- **Jules API Documentation**: <https://developers.google.com/jules/api>
+- **Jules Web Interface**: <https://jules.google>
+- **Model Context Protocol**: <https://modelcontextprotocol.io>
+- **MCP TypeScript SDK**: <https://github.com/modelcontextprotocol/typescript-sdk>
 
 ## License
 
@@ -408,6 +341,7 @@ MIT
 ## Contributing
 
 This is an open-source implementation. Contributions welcome for:
+
 - Additional prompt templates
 - Enhanced error handling
 - Webhook support (when Jules API adds it)

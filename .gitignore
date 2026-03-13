@@ -46,7 +46,7 @@ GEMINI.md
 .jules-mcp/
 
 # Research and design documents - Not needed for users
-docs/
+# docs/
 *.docx
 *.pdf
 
@@ -56,3 +56,6 @@ Context/
 .contextkit/
 *contextkit*
 *ContextKit*
+
+# Serena AI tool
+.serena/

@@ -36,9 +36,11 @@ export class RepositoryValidator {
    * @throws {Error} if the source format is invalid or if the repository is not in the allowlist.
    */
   static validateRepository(source: string): void {
-    // If no allowlist configured, allow all
-    if (!this.allowedRepos) {
-      return;
+    // SECURE: Default to DENY if no allowlist is configured
+    if (!this.allowedRepos || this.allowedRepos.length === 0) {
+      throw new Error(
+        "Security Error: No repositories are allowed. Set JULES_ALLOWED_REPOS environment variable."
+      );
     }
 
     // Extract owner/repo from source format: sources/github/owner/repo
@@ -135,4 +137,48 @@ export async function retryWithBackoff<T>(
   }
 
   throw lastError!;
+}
+
+/**
+ * A simple in-memory rate limiter to prevent abuse.
+ */
+export class RateLimiter {
+  private timestamps: number[] = [];
+  private readonly maxRequests: number;
+  private readonly timeWindowMs: number;
+
+  constructor(maxRequests: number, timeWindowMs: number) {
+    this.maxRequests = maxRequests;
+    this.timeWindowMs = timeWindowMs;
+  }
+
+  /**
+   * Checks if a request is allowed according to the rate limit.
+   * @returns {boolean} True if allowed, false if rate limit exceeded.
+   */
+  isAllowed(): boolean {
+    const now = Date.now();
+    this.timestamps = this.timestamps.filter(t => now - t < this.timeWindowMs);
+    if (this.timestamps.length >= this.maxRequests) {
+      return false;
+    }
+    this.timestamps.push(now);
+    return true;
+  }
+}
+
+/**
+ * Basic secret scanning utility to detect common API key patterns.
+ * @param text The text to scan.
+ * @returns {boolean} True if a potential secret is detected.
+ */
+export function containsSecret(text: string): boolean {
+  if (!text) return false;
+  // Look for common patterns like sk-..., AIza..., generic high-entropy strings might be too noisy
+  const patterns = [
+    /sk-[a-zA-Z0-9]{20,}/,    // OpenAI / general secret keys
+    /AIza[0-9A-Za-z-_]{35}/, // Google API keys
+    /(xox[p|b|o|a]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32})/ // Slack tokens
+  ];
+  return patterns.some(pattern => pattern.test(text));
 }

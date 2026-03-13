@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Core Features
+
 - **Jules API Integration**: Complete TypeScript client for Google Jules v1alpha API
   - List sources (connected repositories)
   - Create coding sessions
@@ -19,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Get session status
 
 #### MCP Resources
+
 - `jules://sources` - Connected GitHub repositories
 - `jules://sessions/list` - Recent sessions summary
 - `jules://sessions/{id}/full` - Complete session details with activities
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `jules://schedules/history` - Execution audit trail
 
 #### MCP Tools
+
 - `create_coding_task` - Create immediate Jules sessions
 - `manage_session` - Approve plans and send feedback
 - `get_session_status` - Poll session progress
@@ -34,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `delete_schedule` - Remove schedules
 
 #### MCP Prompts
+
 - `refactor_module` - Guided refactoring template
 - `setup_weekly_maintenance` - Automated maintenance workflow
 - `audit_security` - Security audit template
@@ -41,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `update_dependencies` - Dependency management template
 
 #### Scheduling Engine ("Thick Server" Pattern)
+
 - **Local persistence**: Schedules stored in `~/.jules-mcp/schedules.json`
 - **Cron engine**: Built on `node-schedule` for reliable execution
 - **State management**: Survives server restarts
@@ -48,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Timezone support**: Configure execution timezone
 
 #### Security Features
+
 - **API key validation**: Required environment variable
 - **Repository allowlist**: `JULES_ALLOWED_REPOS` restriction
 - **Plan approval enforcement**: Human-in-the-loop gates
@@ -55,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Error handling**: Comprehensive error messages
 
 #### Developer Experience
+
 - **TypeScript**: Full type safety
 - **Zod validation**: Input schema validation
 - **Stdio transport**: Local subprocess mode
@@ -62,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Graceful shutdown**: Proper cleanup on exit
 
 ### Documentation
+
 - `README.md` - Complete feature overview and installation
 - `QUICKSTART.md` - 5-minute setup guide
 - `CONFIGURATION.md` - All configuration options
@@ -71,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.env.example` - Environment template
 
 ### Infrastructure
+
 - TypeScript configuration
 - Package.json with proper module settings
 - Build scripts (build, dev, typecheck)
@@ -81,12 +90,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned Features
 
 #### Near-term (When Jules API Supports)
+
 - **Webhook integration**: Real-time notifications instead of polling
 - **Native scheduling**: Migrate to Jules API when scheduling endpoints released
 - **Session cancellation**: Cancel in-progress sessions
 - **Batch operations**: Create multiple sessions atomically
 
 #### Medium-term
+
 - **Conditional scheduling**: Execute only if conditions met (e.g., if tests fail)
 - **Dependency chains**: Task B runs only after Task A completes
 - **Template library**: Expand prompt templates for common workflows
@@ -94,6 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Multi-repository tasks**: Coordinate changes across repos
 
 #### Long-term
+
 - **HTTP transport mode**: For remote/team deployments
 - **Web dashboard**: Visual interface for schedule management
 - **Metrics and analytics**: Track Jules usage and success rates
@@ -128,6 +140,7 @@ When upgrading:
 ## Breaking Changes Policy
 
 We will avoid breaking changes where possible. When necessary:
+
 - Major version bump
 - Migration guide provided
 - Deprecation warnings in previous version
