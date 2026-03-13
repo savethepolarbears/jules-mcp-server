@@ -25,7 +25,6 @@ describe("ScheduleStorage", () => {
     data: unknown,
     apiKey: string,
   ): Promise<string> {
-    const salt = crypto.randomBytes(16);
     const iv = crypto.randomBytes(16);
     const key = await new Promise<Buffer>((resolve, reject) =>
       crypto.scrypt(apiKey, salt, 32, (err, k) =>
