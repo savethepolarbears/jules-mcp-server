@@ -42,13 +42,13 @@ describe('RepositoryValidator', () => {
   });
 
   describe('validateRepository', () => {
-    it('should throw if allowlist is not enabled', () => {
+    it('should allow all repos when allowlist is not configured', () => {
       vi.stubEnv('JULES_ALLOWED_REPOS', '');
       RepositoryValidator.initialize();
 
       expect(() => {
         RepositoryValidator.validateRepository('sources/github/owner/repo');
-      }).toThrow('Security Error: No repositories are allowed. Set JULES_ALLOWED_REPOS environment variable.');
+      }).not.toThrow();
     });
 
     it('should throw for invalid source format', () => {

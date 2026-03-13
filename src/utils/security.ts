@@ -50,11 +50,9 @@ export class RepositoryValidator {
    * @throws {Error} if the source format is invalid or if the repository is not in the allowlist.
    */
   static validateRepository(source: string): void {
-    // SECURE: Default to DENY if no allowlist is configured
+    // If no allowlist is configured, allow all repositories (opt-in security)
     if (!this.allowedRepos || this.allowedRepos.length === 0) {
-      throw new SecurityError(
-        "Security Error: No repositories are allowed. Set JULES_ALLOWED_REPOS environment variable."
-      );
+      return;
     }
 
     // Extract owner/repo from source format: sources/github/owner/repo
