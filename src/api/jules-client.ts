@@ -9,7 +9,6 @@ import type {
   Session,
   CreateSessionRequest,
   ListSessionsResponse,
-  Activity,
   ListActivitiesResponse,
   SendMessageRequest,
 } from '../types/jules-api.js';
@@ -61,6 +60,24 @@ export class JulesClient {
   }
 
   /**
+   * Builds a URL query string while omitting undefined values.
+   * @param params - Query parameters to encode.
+   * @returns Encoded query string, including the leading `?` when needed.
+   */
+  private buildQuery(params: Record<string, string | number | undefined>): string {
+    const searchParams = new URLSearchParams();
+
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined) {
+        searchParams.set(key, String(value));
+      }
+    }
+
+    const query = searchParams.toString();
+    return query ? `?${query}` : '';
+  }
+
+  /**
    * Generic HTTP request handler with authentication and error handling.
    * @param endpoint - The API endpoint to call (relative to the base URL).
    * @param options - The fetch options (method, headers, body, etc.).
@@ -82,6 +99,11 @@ export class JulesClient {
     let lastError: unknown;
 
     while (attempt <= this.maxRetries) {
+      if (attempt > 0) {
+        const delay = Math.pow(2, attempt - 1) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
@@ -94,7 +116,13 @@ export class JulesClient {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          const errorBody = await response.text();
+          const rawErrorBody = await response.text();
+          // SECURE: Truncate error body to prevent log flooding or PII leakage
+          const errorBody =
+            rawErrorBody.length > 500
+              ? rawErrorBody.substring(0, 500) + '... [truncated]'
+              : rawErrorBody;
+
           // Retry on transient 5xx
           if (response.status >= 500 && attempt < this.maxRetries) {
             attempt++;
@@ -115,6 +143,12 @@ export class JulesClient {
         return (await response.json()) as T;
       } catch (error) {
         clearTimeout(timeoutId);
+
+        // Rethrow 4xx JulesAPIErrors immediately — do not retry client errors
+        if (error instanceof JulesAPIError) {
+          throw error;
+        }
+
         const isAbort =
           error instanceof Error && error.name === 'AbortError';
         if ((isAbort || error instanceof Error) && attempt < this.maxRetries) {
@@ -122,8 +156,91 @@ export class JulesClient {
           lastError = error;
           continue;
         }
+        throw new JulesAPIError(
+          `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
+
+    // Exhausted retries
+    throw new JulesAPIError(
+      `Network error after ${this.maxRetries + 1} attempts: ${
+        lastError instanceof Error ? lastError.message : 'Unknown error'
+      }`
+    );
+  }
+
+  /**
+   * Generic HTTP request handler for endpoints that return an empty body (e.g. 204 No Content).
+   * @param endpoint - The API endpoint.
+   * @param options - Fetch options (method, headers, body, etc.).
+   * @returns A promise resolving to an empty object.
+   */
+  private async requestEmpty(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<Record<string, unknown>> {
+    const url = `${this.baseURL}${endpoint}`;
+    const headers = {
+      'X-Goog-Api-Key': this.apiKey,
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    let attempt = 0;
+    let lastError: unknown;
+
+    while (attempt <= this.maxRetries) {
+      if (attempt > 0) {
+        const delay = Math.pow(2, attempt - 1) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        const response = await fetch(url, { ...options, headers, signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+          const rawErrorBody = await response.text();
+          // SECURE: Truncate error body to prevent log flooding or PII leakage
+          const errorBody =
+            rawErrorBody.length > 500
+              ? rawErrorBody.substring(0, 500) + '... [truncated]'
+              : rawErrorBody;
+
+          // Retry on transient 5xx
+          if (response.status >= 500 && attempt < this.maxRetries) {
+            attempt++;
+            lastError = new JulesAPIError(
+              `Jules API error: ${response.statusText}`,
+              response.status,
+              errorBody
+            );
+            continue;
+          }
+          throw new JulesAPIError(
+            `Jules API error: ${response.statusText}`,
+            response.status,
+            errorBody
+          );
+        }
+        // Body may be empty (204 No Content) — return {} rather than trying to parse JSON
+        const text = await response.text();
+        return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        // Rethrow 4xx JulesAPIErrors immediately — do not retry client errors
         if (error instanceof JulesAPIError) {
           throw error;
+        }
+
+        const isAbort = error instanceof Error && error.name === 'AbortError';
+        if ((isAbort || error instanceof Error) && attempt < this.maxRetries) {
+          attempt++;
+          lastError = error;
+          continue;
         }
         throw new JulesAPIError(
           `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -145,9 +262,12 @@ export class JulesClient {
    * @param pageSize - The maximum number of sources to return (default: 100).
    * @returns A promise that resolves with the list of sources.
    */
-  async listSources(pageSize = 100): Promise<ListSourcesResponse> {
+  async listSources(
+    pageSize = 100,
+    pageToken?: string
+  ): Promise<ListSourcesResponse> {
     return this.request<ListSourcesResponse>(
-      `/sources?pageSize=${pageSize}`
+      `/sources${this.buildQuery({ pageSize, pageToken })}`
     );
   }
 
@@ -180,9 +300,12 @@ export class JulesClient {
    * @param pageSize - The maximum number of sessions to return (default: 20).
    * @returns A promise that resolves with the list of sessions.
    */
-  async listSessions(pageSize = 20): Promise<ListSessionsResponse> {
+  async listSessions(
+    pageSize = 20,
+    pageToken?: string
+  ): Promise<ListSessionsResponse> {
     return this.request<ListSessionsResponse>(
-      `/sessions?pageSize=${pageSize}`
+      `/sessions${this.buildQuery({ pageSize, pageToken })}`
     );
   }
 
@@ -235,10 +358,59 @@ export class JulesClient {
    */
   async listActivities(
     sessionId: string,
+    pageSize = 50,
+    pageToken?: string
+  ): Promise<ListActivitiesResponse> {
+    return this.request<ListActivitiesResponse>(
+      `/sessions/${sessionId}/activities${this.buildQuery({
+        pageSize,
+        pageToken,
+      })}`
+    );
+  }
+
+  /**
+   * List activities for a session created after a given timestamp.
+   * GET /v1alpha/sessions/{id}/activities?filter=createTime>"{since}"
+   * @param sessionId - The ID of the session to list activities for.
+   * @param since - ISO timestamp boundary.
+   * @param pageSize - The maximum number of activities to return.
+   * @returns A promise that resolves with the filtered activities.
+   */
+  async listActivitiesSince(
+    sessionId: string,
+    since: string,
     pageSize = 50
   ): Promise<ListActivitiesResponse> {
     return this.request<ListActivitiesResponse>(
-      `/sessions/${sessionId}/activities?pageSize=${pageSize}`
+      `/sessions/${sessionId}/activities${this.buildQuery({
+        pageSize,
+        filter: `createTime>"${since.replace(/"/g, '')}"`,
+      })}`
     );
+  }
+
+  /**
+   * Delete or cancel a session.
+   * DELETE /v1alpha/sessions/{id}
+   * @param sessionId - The ID of the session to delete.
+   * @returns A promise that resolves with the empty response.
+   */
+  async deleteSession(sessionId: string): Promise<Record<string, unknown>> {
+    return this.requestEmpty(`/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Reject the currently proposed plan for a session.
+   * DELETE /v1alpha/sessions/{id}
+   * @param sessionId - The ID of the session whose plan should be rejected.
+   * @returns A promise that resolves with the empty response.
+   */
+  async rejectPlan(sessionId: string): Promise<Record<string, unknown>> {
+    return this.requestEmpty(`/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
   }
 }

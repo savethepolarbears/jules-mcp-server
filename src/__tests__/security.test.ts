@@ -42,13 +42,13 @@ describe('RepositoryValidator', () => {
   });
 
   describe('validateRepository', () => {
-    it('should not throw if allowlist is not enabled', () => {
+    it('should throw if allowlist is not enabled', () => {
       vi.stubEnv('JULES_ALLOWED_REPOS', '');
       RepositoryValidator.initialize();
 
       expect(() => {
         RepositoryValidator.validateRepository('sources/github/owner/repo');
-      }).not.toThrow();
+      }).toThrow('Security Error: No repositories are allowed. Set JULES_ALLOWED_REPOS environment variable.');
     });
 
     it('should throw for invalid source format', () => {
@@ -75,7 +75,21 @@ describe('RepositoryValidator', () => {
 
       expect(() => {
         RepositoryValidator.validateRepository('sources/github/owner/repo2');
-      }).toThrow(/Repository "owner\/repo2" is not in the allowed repositories list/);
+      }).toThrow(/Repository "owner\/repo2" is not in the allowed list/);
+    });
+
+    it('should not reveal allowed list contents in error message', () => {
+      process.env.JULES_ALLOWED_REPOS = 'secret-owner/private-repo,another-secret/repo';
+      RepositoryValidator.initialize();
+      try {
+        expect(() =>
+          RepositoryValidator.validateRepository('sources/github/attacker/probe')
+        ).toThrow(
+          expect.not.stringContaining('secret-owner')
+        );
+      } finally {
+        delete process.env.JULES_ALLOWED_REPOS;
+      }
     });
   });
 });

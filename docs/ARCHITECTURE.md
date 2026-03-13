@@ -12,13 +12,15 @@ The Jules MCP Server implements a **"Thick Server"** architecture that bridges t
 **Transport:** Stdio (standard input/output)
 **Responsibility:** JSON-RPC 2.0 communication with MCP Hosts (Claude Desktop, Cursor, etc.)
 
-**Key Components:**
+#### Key Components
+
 - `Server` class from MCP SDK
 - `StdioServerTransport` for local subprocess communication
 - Request handlers for resources, tools, and prompts
 
-**Protocol Flow:**
-```
+#### Protocol Flow
+
+```text
 MCP Host → stdin → JSON-RPC Request → Request Handler → Tool/Resource → Response → stdout → MCP Host
 ```
 
@@ -27,15 +29,18 @@ MCP Host → stdin → JSON-RPC Request → Request Handler → Tool/Resource �
 **File:** `src/api/jules-client.ts`
 **Responsibility:** Type-safe HTTP communication with Jules API
 
-**Features:**
+#### Features
+
 - **Authentication:** Automatic `X-Goog-Api-Key` header injection
 - **Error handling:** Structured error responses with status codes
 - **Type safety:** Full TypeScript interfaces for all endpoints
 - **Retry logic:** Exponential backoff for rate limits (planned)
 
-**Endpoints Wrapped:**
+#### Endpoints Wrapped
+
 | Method | Endpoint | Function |
-|--------|----------|----------|
+| -------- | ---------- | ---------- |
+
 | GET | `/sources` | `listSources()` |
 | GET | `/sources/{name}` | `getSource()` |
 | POST | `/sessions` | `createSession()` |
@@ -51,13 +56,15 @@ MCP Host → stdin → JSON-RPC Request → Request Handler → Tool/Resource �
 **Technology:** File-based JSON storage
 **Location:** `~/.jules-mcp/schedules.json`
 
-**Why File-Based?**
+#### Why File-Based?
+
 1. **Portability:** Works across all platforms (macOS, Windows, Linux)
 2. **No dependencies:** No database server required
 3. **Inspectable:** Users can manually view/edit schedules
 4. **Backup-friendly:** Simple file copy for disaster recovery
 
-**Data Schema:**
+#### Data Schema
+
 ```typescript
 interface ScheduleStore {
   version: string;              // Schema version for migrations
@@ -67,7 +74,8 @@ interface ScheduleStore {
 }
 ```
 
-**Operations:**
+#### Operations
+
 - `load()` - Reads from disk with caching
 - `save()` - Atomic write with JSON formatting
 - `upsertTask()` - Add or update schedule
@@ -82,9 +90,9 @@ interface ScheduleStore {
 **Technology:** `node-schedule`
 **Responsibility:** In-memory cron job management
 
-**Lifecycle:**
+#### Lifecycle
 
-```
+```text
 Server Startup
     ↓
 storage.load() → Read schedules.json
@@ -102,7 +110,8 @@ jobCallback() → client.createSession()
 storage.updateLastRun() → Record execution
 ```
 
-**Key Methods:**
+#### Key Methods
+
 - `initialize()` - Hydrates schedules on startup
 - `scheduleTask()` - Registers cron job in memory
 - `cancelTask()` - Removes job from memory
@@ -110,7 +119,8 @@ storage.updateLastRun() → Record execution
 - `rescheduleTask()` - Updates existing schedule
 - `shutdown()` - Graceful cleanup on exit
 
-**Thread Safety:**
+#### Thread Safety
+
 - `node-schedule` is single-threaded (Node.js event loop)
 - All async operations use proper `await`
 - No race conditions on schedule map
@@ -120,21 +130,24 @@ storage.updateLastRun() → Record execution
 **File:** `src/mcp/resources.ts`
 **Responsibility:** Expose read-only context to AI
 
-**Resources Implemented:**
+#### Resources Implemented
 
 #### jules://sources
+
 - **Purpose:** Repository discovery
 - **Data Source:** `GET /v1alpha/sources` (Jules API)
 - **Format:** Simplified JSON list
 - **Update Frequency:** On-demand (fetched per request)
 
 #### jules://sessions/list
+
 - **Purpose:** Recent session summary
 - **Data Source:** `GET /v1alpha/sessions`
 - **Optimization:** Limited to 50 most recent
 - **Use Case:** Duplication checking, status reporting
 
 #### jules://sessions/{id}/full
+
 - **Purpose:** Deep dive into specific session
 - **Data Sources:** Parallel fetch of:
   - `GET /v1alpha/sessions/{id}` (session state)
@@ -143,12 +156,14 @@ storage.updateLastRun() → Record execution
 - **Artifact Handling:** Code diffs formatted for readability
 
 #### jules://schedules
+
 - **Purpose:** Local schedule visibility
 - **Data Source:** Local storage (schedules.json)
 - **Live Data:** Includes next run time from scheduler
 - **Use Case:** Audit, management
 
 #### jules://schedules/history
+
 - **Purpose:** Execution audit trail
 - **Data Source:** `lastRun` fields in storage
 - **Sorted:** Most recent first
@@ -161,7 +176,8 @@ storage.updateLastRun() → Record execution
 
 **Input Validation:** All tools use Zod schemas for type safety and validation before API calls.
 
-**Error Handling Pattern:**
+#### Error Handling Pattern
+
 ```typescript
 try {
   // Execute tool logic
@@ -175,10 +191,11 @@ try {
 }
 ```
 
-**Tool Catalog:**
+#### Tool Catalog
 
 | Tool | API Mapping | Consequential | Async |
-|------|-------------|---------------|-------|
+| ------ | ------------- | --------------- | ------- |
+
 | `create_coding_task` | `POST /sessions` | No* | Yes |
 | `manage_session` (approve) | `POST /sessions/{id}:approvePlan` | Yes | Yes |
 | `manage_session` (message) | `POST /sessions/{id}:sendMessage` | No | Yes |
@@ -194,7 +211,8 @@ try {
 **File:** `src/mcp/prompts.ts`
 **Responsibility:** Template-based guidance
 
-**Prompt Architecture:**
+#### Prompt Architecture
+
 ```typescript
 interface PromptTemplate {
   name: string;                    // Unique identifier
@@ -204,7 +222,8 @@ interface PromptTemplate {
 }
 ```
 
-**Prompts Provided:**
+#### Prompts Provided
+
 1. **refactor_module** - Structured refactoring guidance
 2. **setup_weekly_maintenance** - Automated maintenance bootstrapping
 3. **audit_security** - OWASP-focused security scan
@@ -215,7 +234,7 @@ interface PromptTemplate {
 
 ### Immediate Task (create_coding_task)
 
-```
+```text
 User (via AI): "Fix bug X"
     ↓
 MCP Host: CallTool{name: "create_coding_task", args: {...}}
@@ -237,7 +256,7 @@ AI tells User: "Task started. Session ID: abc123. Monitor at: jules://sessions/a
 
 ### Scheduled Task (schedule_recurring_task)
 
-```
+```text
 User (via AI): "Schedule weekly deps update"
     ↓
 MCP Host: CallTool{name: "schedule_recurring_task", ...}
@@ -272,7 +291,9 @@ Jules session runs autonomously
 ### Remote State (Jules API)
 
 **Owned by:** Google Jules backend
-**Authoritative for:**
+
+#### Authoritative for
+
 - Sessions and their lifecycle states
 - Activities and execution logs
 - Connected sources (repositories)
@@ -284,7 +305,9 @@ Jules session runs autonomously
 ### Local State (MCP Server)
 
 **Owned by:** This MCP server instance
-**Authoritative for:**
+
+#### Authoritative for
+
 - Scheduled tasks (cron expressions, payloads)
 - Schedule execution history (lastRun timestamps)
 - Schedule enable/disable status
@@ -296,6 +319,7 @@ Jules session runs autonomously
 ### Synchronization
 
 **No sync needed** - these are independent state domains:
+
 - Schedules define *when* to create sessions
 - Sessions are the *result* of schedule execution
 - Linkage via `lastSessionId` field in schedule metadata
@@ -304,7 +328,7 @@ Jules session runs autonomously
 
 ### Defense in Depth
 
-```
+```text
 Layer 1: Environment Validation
     ↓ JULES_API_KEY required
     ↓ JULES_ALLOWED_REPOS filter (optional)
@@ -331,7 +355,8 @@ Layer 5: GitHub Protection
 ### Threat Mitigation
 
 | Threat | Mitigation | Layer |
-|--------|------------|-------|
+| -------- | ------------ | ------- |
+
 | API key theft | Environment variables only, never in code | Dev Practice |
 | Unauthorized repo access | JULES_ALLOWED_REPOS allowlist | Input Validation |
 | Malicious prompts | Plan approval requirement | Business Logic |
@@ -343,7 +368,8 @@ Layer 5: GitHub Protection
 ### Latency
 
 | Operation | Expected Latency | Notes |
-|-----------|-----------------|-------|
+| ----------- | ----------------- | ------- |
+
 | `list_sources` tool | 200-500ms | HTTP GET, cached by Jules |
 | `create_coding_task` tool | 300-800ms | HTTP POST, returns immediately |
 | `get_session_status` tool | 200-400ms | HTTP GET, fast |
@@ -353,16 +379,19 @@ Layer 5: GitHub Protection
 
 ### Scalability
 
-**Concurrent Sessions:**
+#### Concurrent Sessions
+
 - MCP server can handle unlimited concurrent tool calls (Node.js event loop)
 - Jules API has rate limits (unknown, likely 60 tasks/day for free tier)
 
-**Scheduled Tasks:**
+#### Scheduled Tasks
+
 - Practical limit: ~100-200 schedules per server instance
 - `node-schedule` can handle thousands of jobs
 - Bottleneck: Jules API quotas, not scheduler
 
-**Memory Usage:**
+#### Memory Usage
+
 - Base: ~50MB (Node.js runtime + dependencies)
 - Per schedule: ~1KB (schedule metadata)
 - Per active session monitor: ~5KB
@@ -390,11 +419,13 @@ Layer 5: GitHub Protection
 ### Custom Storage Backend
 
 Replace `ScheduleStorage` implementation:
+
 - Keep same interface
 - Swap `readFile/writeFile` with database calls
 - Options: PostgreSQL, Redis, MongoDB
 
 Example:
+
 ```typescript
 class PostgresScheduleStorage implements ScheduleStorage {
   async load(): Promise<ScheduleStore> {
@@ -408,7 +439,7 @@ class PostgresScheduleStorage implements ScheduleStorage {
 
 ### Model 1: Local Development (stdio)
 
-```
+```text
 Claude Desktop (MCP Host)
     ↓ spawns subprocess
 Jules MCP Server (Node.js process)
@@ -418,7 +449,8 @@ Google Jules API
 User's GitHub Repositories
 ```
 
-**Characteristics:**
+#### Characteristics
+
 - API key on local machine
 - Schedules run only when computer is on
 - Zero network configuration
@@ -426,7 +458,7 @@ User's GitHub Repositories
 
 ### Model 2: Team Server (HTTP/SSE)
 
-```
+```text
 Multiple AI Clients
     ↓ HTTPS/SSE
 Jules MCP Server (Docker container)
@@ -436,13 +468,15 @@ Google Jules API
 Team GitHub Repositories
 ```
 
-**Characteristics:**
+#### Characteristics
+
 - API key in Docker secret
 - 24/7 schedule execution
 - Requires load balancer and auth
 - Higher latency
 
-**Implementation Change:**
+#### Implementation Change
+
 Replace `StdioServerTransport` with `StreamableHTTPServerTransport` in `src/index.ts`.
 
 ## Design Decisions
@@ -484,6 +518,7 @@ Replace `StdioServerTransport` with `StreamableHTTPServerTransport` in `src/inde
 ### Fail Fast
 
 Invalid inputs are rejected immediately with descriptive errors:
+
 - Invalid cron expressions
 - Missing required parameters
 - Repository not in allowlist
@@ -491,6 +526,7 @@ Invalid inputs are rejected immediately with descriptive errors:
 ### Graceful Degradation
 
 API failures don't crash the server:
+
 - HTTP errors wrapped in try/catch
 - Tool returns `{ success: false, error: "..." }`
 - Server continues running
@@ -498,6 +534,7 @@ API failures don't crash the server:
 ### Explicit Error Messages
 
 Errors guide the user to resolution:
+
 - "Repository 'X' not found. Please check jules://sources"
 - "Invalid cron expression. Format: minute hour day month weekday"
 
@@ -519,6 +556,7 @@ Errors guide the user to resolution:
 ### Manual Testing
 
 Current testing approach:
+
 1. Configure with test API key
 2. Connect to Claude Desktop
 3. Execute each tool via Claude
@@ -528,12 +566,14 @@ Current testing approach:
 
 ### Logging
 
-**MCP Logging Protocol:**
+#### MCP Logging Protocol
+
 - All scheduler events logged via `server.sendLoggingMessage()`
 - Log levels: `info`, `warn`, `error`, `debug`
 - Visible in Claude Desktop developer console
 
-**Log Events:**
+#### Log Events
+
 - Server startup
 - Schedule hydration (task count)
 - Schedule execution (task name, session ID)
@@ -543,6 +583,7 @@ Current testing approach:
 ### Metrics (Planned)
 
 Future additions:
+
 - Task success/failure rates
 - Average session duration
 - Schedule execution reliability
@@ -553,6 +594,7 @@ Future additions:
 ### Async/Await
 
 All I/O operations use async/await:
+
 - HTTP requests (Jules API)
 - File I/O (schedule storage)
 - Parallel fetching (session + activities)
@@ -560,6 +602,7 @@ All I/O operations use async/await:
 ### No Blocking Operations
 
 The server never blocks the event loop:
+
 - `fetch()` is non-blocking
 - File I/O uses `fs/promises`
 - Scheduler callbacks are async
@@ -567,6 +610,7 @@ The server never blocks the event loop:
 ### Concurrent Tool Calls
 
 MCP Host can call multiple tools in parallel:
+
 - Each tool call is independent
 - Shared state (schedules) uses async locks (implicit in Node.js)
 
@@ -574,13 +618,15 @@ MCP Host can call multiple tools in parallel:
 
 ### When Jules API Adds Native Scheduling
 
-**Migration Path:**
+#### Migration Path
+
 1. Add new tool: `create_native_schedule` (wraps new API endpoint)
 2. Deprecate `schedule_recurring_task` (with warning)
 3. Provide migration script: Convert local schedules to API schedules
 4. Remove local scheduler after 6-month transition period
 
-**Backward Compatibility:**
+#### Backward Compatibility
+
 ```typescript
 async scheduleRecurringTask(args) {
   if (JULES_API_SUPPORTS_SCHEDULING) {
@@ -597,8 +643,9 @@ async scheduleRecurringTask(args) {
 
 When Jules adds webhooks for session events:
 
-**Architecture Change:**
-```
+#### Architecture Change
+
+```text
 Jules API
     ↓ HTTP POST (webhook)
 Webhook Server (new component in src/webhooks/)
@@ -608,7 +655,8 @@ MCP Host
 User sees real-time progress
 ```
 
-**Implementation:**
+#### Implementation
+
 - Add Express.js HTTP server
 - Expose `/webhooks/jules` endpoint
 - Verify webhook signatures
@@ -620,7 +668,8 @@ User sees real-time progress
 ### Production Dependencies
 
 | Package | Version | Purpose |
-|---------|---------|---------|
+| --------- | --------- | --------- |
+
 | `@modelcontextprotocol/sdk` | ^1.0.4 | MCP protocol implementation |
 | `node-schedule` | ^2.1.1 | Cron scheduling engine |
 | `zod` | ^3.23.8 | Schema validation |
@@ -628,7 +677,8 @@ User sees real-time progress
 ### Development Dependencies
 
 | Package | Version | Purpose |
-|---------|---------|---------|
+| --------- | --------- | --------- |
+
 | `typescript` | ^5.7.2 | Type checking and compilation |
 | `@types/node` | ^22.10.2 | Node.js type definitions |
 | `@types/node-schedule` | ^2.1.7 | node-schedule types |
@@ -645,6 +695,7 @@ User sees real-time progress
 ### Separation of Concerns
 
 Each layer has a single responsibility:
+
 - `api/` - HTTP communication only
 - `storage/` - Persistence only
 - `scheduler/` - Cron execution only
@@ -705,19 +756,21 @@ Each layer has a single responsibility:
 
 **Scenario:** Schedules.json corrupted
 
-**Recovery:**
+#### Recovery
+
 1. Server will create new empty file
 2. Lost schedules must be recreated
 3. Recommendation: Backup schedules.json regularly
 
-**Prevention:**
+#### Prevention
+
 - Atomic writes (write to temp file, then rename)
 - JSON validation on load
 - Version field for future migrations
 
 ## References
 
-- Jules API: https://developers.google.com/jules/api
-- MCP Specification: https://modelcontextprotocol.io/specification
-- MCP TypeScript SDK: https://github.com/modelcontextprotocol/typescript-sdk
-- node-schedule: https://github.com/node-schedule/node-schedule
+- Jules API: <https://developers.google.com/jules/api>
+- MCP Specification: <https://modelcontextprotocol.io/specification>
+- MCP TypeScript SDK: <https://github.com/modelcontextprotocol/typescript-sdk>
+- node-schedule: <https://github.com/node-schedule/node-schedule>

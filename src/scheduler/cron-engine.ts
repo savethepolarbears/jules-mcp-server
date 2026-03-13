@@ -3,7 +3,8 @@
  * Manages in-memory timers for scheduled Jules tasks
  */
 
-import schedule, { Job } from 'node-schedule';
+import type { Job } from 'node-schedule';
+import schedule from 'node-schedule';
 import type { ScheduledTask } from '../types/schedule.js';
 import type { JulesClient } from '../api/jules-client.js';
 import type { ScheduleStorage } from '../storage/schedule-store.js';
@@ -13,7 +14,7 @@ import { retryWithBackoff } from '../utils/security.js';
  * Manages the scheduling and execution of cron jobs for Jules tasks.
  */
 export class CronEngine {
-  private jobs: Map<string, Job> = new Map();
+  private jobs = new Map<string, Job>();
   private readonly storage: ScheduleStorage;
   private readonly julesClient: JulesClient;
   private readonly logger: (message: string) => void;
@@ -236,6 +237,6 @@ export class CronEngine {
       this.logger(`Canceled job: ${taskId}`);
     }
     this.jobs.clear();
-    schedule.gracefulShutdown();
+    void schedule.gracefulShutdown();
   }
 }

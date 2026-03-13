@@ -6,14 +6,17 @@ Practical examples of using the Jules MCP Server with AI assistants.
 
 ### Example 1: Fix a Bug
 
-**User to AI Assistant:**
-```
+#### User to AI Assistant
+
+```text
 "Use Jules to fix the authentication bug in the login module of our backend repo"
 ```
 
-**AI Assistant Actions:**
+#### AI Assistant Actions
+
 1. Read `jules://sources` to find `sources/github/myorg/backend`
 2. Call `create_coding_task`:
+
    ```json
    {
      "prompt": "Fix the authentication bug in src/auth/login.ts. The bug causes users to be logged out after 5 minutes instead of the configured 30 minutes. Investigate the session timeout logic and correct it.",
@@ -23,16 +26,19 @@ Practical examples of using the Jules MCP Server with AI assistants.
      "require_plan_approval": true
    }
    ```
+
 3. Return: "Task created. Session ID: abc123. Status: PLANNING. I'll monitor and notify when the plan is ready for review."
 
 ### Example 2: Add Tests
 
-**User:**
-```
+#### User
+
+```text
 "Add comprehensive tests for the payment processing module"
 ```
 
-**AI:**
+#### AI
+
 1. Calls `create_coding_task` with detailed prompt about test coverage
 2. Monitors via `get_session_status`
 3. When state reaches `AWAITING_PLAN_APPROVAL`, reads `jules://sessions/{id}/full`
@@ -43,14 +49,17 @@ Practical examples of using the Jules MCP Server with AI assistants.
 
 ### Example 3: Weekly Dependency Updates
 
-**User:**
-```
+#### User
+
+```text
 "Set up Jules to update dependencies every Monday morning in our frontend repo"
 ```
 
-**AI Actions:**
+#### AI Actions
+
 1. Read `jules://sources` to validate repository exists
 2. Call `schedule_recurring_task`:
+
    ```json
    {
      "task_name": "Frontend Weekly Deps",
@@ -61,9 +70,11 @@ Practical examples of using the Jules MCP Server with AI assistants.
      "require_plan_approval": false
    }
    ```
+
 3. Confirm: "Scheduled task 'Frontend Weekly Deps' will run every Monday at 9 AM. Next execution: 2025-01-20T09:00:00Z"
 
-**What Happens Next:**
+#### What Happens Next
+
 - Every Monday at 9 AM, the MCP server automatically calls Jules API
 - Creates a new session with the prompt
 - Jules updates dependencies and creates a PR
@@ -71,13 +82,16 @@ Practical examples of using the Jules MCP Server with AI assistants.
 
 ### Example 4: Monthly Security Audit
 
-**User:**
-```
+#### User
+
+```text
 "Schedule a monthly security audit for our API repository"
 ```
 
-**AI:**
+#### AI
+
 Uses the `audit_security` prompt template with `schedule_recurring_task`:
+
 - Cron: `"0 2 1 * *"` (1st of month at 2 AM)
 - Comprehensive security scan prompt
 - Require plan approval: true (security changes should be reviewed)
@@ -86,16 +100,19 @@ Uses the `audit_security` prompt template with `schedule_recurring_task`:
 
 ### Example 5: Check Active Tasks
 
-**User:**
-```
+#### User
+
+```text
 "What Jules tasks are currently running?"
 ```
 
-**AI:**
+#### AI
+
 1. Reads `jules://sessions/list` resource
 2. Filters for sessions with state `IN_PROGRESS` or `PLANNING`
 3. Returns summary:
-   ```
+
+   ```text
    Active Jules Sessions:
    1. Session abc123: "Add API rate limiting" - IN_PROGRESS
    2. Session def456: "Refactor database queries" - PLANNING
@@ -103,12 +120,14 @@ Uses the `audit_security` prompt template with `schedule_recurring_task`:
 
 ### Example 6: Review a Completed Task
 
-**User:**
-```
+#### User
+
+```text
 "Show me what Jules did in session abc123"
 ```
 
-**AI:**
+#### AI
+
 1. Reads `jules://sessions/abc123/full` resource
 2. Parses activities to extract:
    - Plan steps
@@ -119,13 +138,16 @@ Uses the `audit_security` prompt template with `schedule_recurring_task`:
 
 ### Example 7: Iterate on a Task
 
-**User:**
-```
+#### User
+
+```text
 "Tell Jules to use the lodash library instead of writing custom utilities"
 ```
 
-**AI:**
+#### AI
+
 1. Calls `manage_session`:
+
    ```json
    {
      "session_id": "abc123",
@@ -133,19 +155,23 @@ Uses the `audit_security` prompt template with `schedule_recurring_task`:
      "message": "Please use the lodash library for utility functions instead of creating custom implementations. Import lodash and refactor the custom utilities to use lodash methods."
    }
    ```
+
 2. Jules incorporates feedback and revises the plan
 
 ## Advanced Workflows
 
 ### Example 8: Conditional Scheduling
 
-**User:**
-```
+#### User
+
+```text
 "Set up a daily task that only runs if there are open security vulnerability alerts"
 ```
 
-**Current Implementation:**
+#### Current Implementation
+
 The AI would need to orchestrate this logic itself:
+
 1. Schedule a daily check task
 2. That task queries GitHub's Dependabot API
 3. If vulnerabilities found, create a Jules session
@@ -154,19 +180,22 @@ The AI would need to orchestrate this logic itself:
 
 ### Example 9: Multi-Repository Coordination
 
-**User:**
-```
+#### User
+
+```text
 "Update the API version in both frontend and backend repos, ensuring they stay compatible"
 ```
 
-**AI Strategy:**
+#### AI Strategy
+
 1. Create task for backend: "Update API to v2.0"
 2. Wait for backend task to complete
 3. Review backend changes to understand new API contract
 4. Create task for frontend: "Update to use backend API v2.0 based on these changes: [summary]"
 
-**Workflow:**
-```
+#### Workflow
+
+```text
 - Create backend session (require_plan_approval: true)
 - Review plan
 - Approve
@@ -177,12 +206,14 @@ The AI would need to orchestrate this logic itself:
 
 ### Example 10: Using Prompts for Best Practices
 
-**User:**
-```
+#### User
+
+```text
 "Help me set up weekly maintenance for my blog repository"
 ```
 
-**AI:**
+#### AI
+
 1. Calls `get_prompt` with name `setup_weekly_maintenance`
 2. Fills in arguments: `repository: "myuser/blog"`, `tasks: "dependency updates, link checker, image optimization"`
 3. Executes the rendered template, which guides creating the schedule
@@ -191,13 +222,16 @@ The AI would need to orchestrate this logic itself:
 
 ### Example 11: List All Schedules
 
-**User:**
-```
+#### User
+
+```text
 "What Jules tasks are scheduled?"
 ```
 
-**AI:**
+#### AI
+
 Calls `list_schedules` tool, returns:
+
 ```json
 {
   "count": 2,
@@ -220,12 +254,14 @@ Calls `list_schedules` tool, returns:
 
 ### Example 12: Delete a Schedule
 
-**User:**
-```
+#### User
+
+```text
 "Stop the weekly dependency update schedule"
 ```
 
-**AI:**
+#### AI
+
 ```json
 {
   "tool": "delete_schedule",
@@ -239,13 +275,16 @@ Response: "Schedule deleted. Task will no longer execute."
 
 ### Example 13: Review Schedule History
 
-**User:**
-```
+#### User
+
+```text
 "Show me when scheduled tasks last ran"
 ```
 
-**AI:**
+#### AI
+
 Reads `jules://schedules/history` resource:
+
 ```json
 {
   "history": [
@@ -269,13 +308,16 @@ Reads `jules://schedules/history` resource:
 
 ### Example 14: Repository Not Found
 
-**User:**
-```
+#### User
+
+```text
 "Create a task for the nonexistent-repo repository"
 ```
 
-**AI:**
+#### AI
+
 Calls `create_coding_task`, receives error:
+
 ```json
 {
   "success": false,
@@ -287,13 +329,16 @@ AI responds: "That repository isn't connected to Jules. Here are your available 
 
 ### Example 15: Invalid Cron Expression
 
-**User:**
-```
+#### User
+
+```text
 "Schedule a task to run 'every Tuesday at 25:00'" (invalid hour)
 ```
 
-**AI:**
+#### AI
+
 Calls `schedule_recurring_task`, receives:
+
 ```json
 {
   "success": false,
@@ -301,7 +346,7 @@ Calls `schedule_recurring_task`, receives:
 }
 ```
 
-AI responds: "That time isn't valid (25:00). Did you mean 2 AM (02:00)? The cron would be: 0 2 * * 2"
+AI responds: "That time isn't valid (25:00). Did you mean 2 AM (02:00)? The cron would be: 0 2 ** 2"
 
 ## Integration Examples
 
@@ -353,38 +398,44 @@ jobs:
 
 ### Clear Prompts
 
-**Bad:**
-```
+#### Bad
+
+```text
 "Fix the code"
 ```
 
-**Good:**
-```
+#### Good
+
+```text
 "Fix the race condition in src/api/users.ts where concurrent requests can create duplicate user records. Add proper locking or unique constraints."
 ```
 
 ### Specific File References
 
-**Bad:**
-```
+#### Bad
+
+```text
 "Make the app faster"
 ```
 
-**Good:**
-```
+#### Good
+
+```text
 "Optimize the database queries in src/db/queries.ts. Add indexes for frequently queried fields and use prepared statements to reduce parsing overhead."
 ```
 
 ### Test Requirements
 
-**Include in prompt:**
-```
+#### Include in prompt
+
+```text
 "After making changes, run 'npm test' and ensure all tests pass. If tests fail, fix them as part of this task."
 ```
 
 ### Iterative Refinement
 
 Don't expect perfection on first try:
+
 1. Start task with `require_plan_approval: true`
 2. Review plan
 3. Send feedback via `manage_session` if needed
@@ -394,7 +445,7 @@ Don't expect perfection on first try:
 
 ## Cron Expression Reference
 
-```
+```text
 * * * * *
 │ │ │ │ │
 │ │ │ │ └─ Day of week (0-6, 0=Sunday)
@@ -404,7 +455,8 @@ Don't expect perfection on first try:
 └───────── Minute (0-59)
 ```
 
-**Common Patterns:**
+### Common Patterns
+
 - `"0 9 * * 1"` - Every Monday at 9 AM
 - `"0 */6 * * *"` - Every 6 hours
 - `"0 0 * * 0"` - Every Sunday at midnight
@@ -425,14 +477,16 @@ If a session doesn't progress:
 ### Schedule Didn't Execute
 
 Check:
+
 1. `list_schedules` - Is it enabled?
 2. Server logs - Was server running at execution time?
 3. `jules://schedules/history` - Any recent executions?
-4. Cron expression - Is it valid? Test at https://crontab.guru
+4. Cron expression - Is it valid? Test at <https://crontab.guru>
 
 ### Permission Denied
 
 If you get repository access errors:
+
 1. Verify repo is in `jules://sources`
 2. Check `JULES_ALLOWED_REPOS` if set
 3. Ensure GitHub App is installed on the repository

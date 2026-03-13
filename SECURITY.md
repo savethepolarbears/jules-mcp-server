@@ -23,17 +23,20 @@ The Jules MCP Server grants AI assistants the ability to create, schedule, and a
 
 ### 1. API Key Protection
 
-**Storage:**
+#### Storage
+
 - NEVER commit `JULES_API_KEY` to version control
 - Use environment variables or secrets management systems
 - For CI/CD, use secure environment injection (GitHub Secrets, GitLab CI Variables)
 
-**Rotation:**
+#### Rotation
+
 - Jules supports up to 3 active keys
 - Rotate keys quarterly or immediately after suspected compromise
 - Revoke old keys in Jules settings after rotation
 
-**Access Control:**
+#### Access Control
+
 - Limit who has access to the API key
 - Use separate keys for different environments (dev/staging/prod)
 - Audit key usage through Jules's web interface
@@ -49,7 +52,8 @@ export JULES_ALLOWED_REPOS="myorg/sandbox,myorg/test-repo"
 
 **Implementation:** The server validates the `source` parameter in `create_coding_task` against this list before calling the API.
 
-**Enforcement Logic:**
+#### Enforcement Logic
+
 ```typescript
 if (process.env.JULES_ALLOWED_REPOS) {
   const allowed = process.env.JULES_ALLOWED_REPOS.split(',');
@@ -66,11 +70,12 @@ For repositories containing sensitive logic or production code:
 
 **Always use `require_plan_approval: true`:**
 
-```
+```text
 "Create a task on prod-backend with plan approval required"
 ```
 
-**Review Process:**
+#### Review Process
+
 1. Jules generates plan → Session enters `AWAITING_PLAN_APPROVAL`
 2. Read `jules://sessions/{id}/full` to review proposed changes
 3. Human reviews for:
@@ -92,28 +97,33 @@ if (criticalRepos.some(repo => source.includes(repo))) {
 
 ### 4. Audit Logging
 
-**Local Logs:**
+#### Local Logs
+
 - All scheduled task executions logged to `~/.jules-mcp/schedules.json` (lastRun, lastSessionId)
 - Resource: `jules://schedules/history` provides audit trail
 
-**Recommendations:**
+#### Recommendations
+
 - Forward logs to centralized logging (Splunk, ELK, CloudWatch)
 - Set up alerts for unexpected schedule executions
 - Periodically review `jules://sessions/list` for suspicious tasks
 
-**Example Audit Query:**
-```
+#### Example Audit Query
+
+```text
 "Show me all Jules sessions created in the last 7 days"
 ```
 
 ### 5. Least Privilege Principle
 
-**GitHub App Permissions:**
+#### GitHub App Permissions
+
 - Grant Jules only the minimum repository permissions needed
 - Use read-only repositories for experimentation
 - Restrict Jules's access to specific repositories in the GitHub App settings
 
-**Branch Protection:**
+#### Branch Protection
+
 - Even with `AUTO_CREATE_PR`, protect main branches with:
   - Required reviews
   - Required status checks
@@ -124,12 +134,14 @@ if (criticalRepos.some(repo => source.includes(repo))) {
 
 **Risk:** Scheduled tasks run without human interaction, potentially at 3 AM when no one is monitoring.
 
-**Mitigations:**
+#### Mitigations
+
 - **Notifications**: Set up alerts when scheduled tasks execute (integrate with Slack, email, etc.)
 - **Dry Run Mode**: For new schedules, test with `require_plan_approval: true` first
 - **Schedule Review**: Regularly audit `jules://schedules` to ensure only legitimate tasks exist
 
-**Critical Schedule Security:**
+#### Critical Schedule Security
+
 ```typescript
 // Before persisting a schedule, validate:
 if (taskPayload.requirePlanApproval === false && isCriticalRepo(source)) {
@@ -152,7 +164,8 @@ npm audit fix
 # In package.json: "zod": "3.23.8" (not "^3.23.8")
 ```
 
-**Regularly update:**
+#### Regularly update
+
 - `@modelcontextprotocol/sdk` - MCP protocol updates
 - `node-schedule` - Cron engine
 - `zod` - Schema validation
@@ -161,7 +174,7 @@ npm audit fix
 
 ### Suspected API Key Compromise
 
-1. **Immediate:** Revoke the compromised key in Jules settings (https://jules.google/settings)
+1. **Immediate:** Revoke the compromised key in Jules settings (<https://jules.google/settings>)
 2. **Investigate:** Check `jules://sessions/list` for unauthorized tasks
 3. **Review:** Examine `jules://schedules` for injected schedules
 4. **Rotate:** Generate new key and update environment configuration
@@ -187,6 +200,7 @@ npm audit fix
 ### Local Development
 
 For personal use on a laptop:
+
 - API key in shell profile or `.env`
 - MCP server runs as stdio subprocess of Claude Desktop
 - Minimal attack surface (no network exposure)
@@ -201,7 +215,8 @@ For shared usage on a server:
 **TLS:** Always use HTTPS with valid certificates
 **Monitoring:** Real-time alerting on task creation
 
-**Example Secure Deployment:**
+#### Example Secure Deployment
+
 ```dockerfile
 FROM node:18-alpine
 RUN addgroup -g 1001 jules && adduser -D -u 1001 -G jules jules
@@ -212,7 +227,8 @@ RUN npm install && npm run build
 CMD ["node", "dist/index.js"]
 ```
 
-**Secrets Management:**
+#### Secrets Management
+
 ```yaml
 # Kubernetes secret
 apiVersion: v1
@@ -261,6 +277,7 @@ If using this server with a fully autonomous agent (no human in loop):
 ### Audit Requirements
 
 For regulated industries:
+
 - Maintain logs of all Jules sessions
 - Implement approval workflows
 - Document who approved what changes

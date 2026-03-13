@@ -6,6 +6,7 @@
 import type { JulesClient } from '../api/jules-client.js';
 import type { ScheduleStorage } from '../storage/schedule-store.js';
 import type { CronEngine } from '../scheduler/cron-engine.js';
+import type { Activity, ChangeSet, Session } from '../types/jules-api.js';
 import { smartTruncate } from '../utils/security.js';
 
 /**
@@ -24,6 +25,56 @@ export class JulesResources {
     private readonly storage: ScheduleStorage,
     private readonly scheduler: CronEngine
   ) {}
+
+  /**
+   * Returns a normalized repository label.
+   * @param session - Session payload from the Jules API.
+   * @returns Repository resource name or a repoless label.
+   */
+  private getRepositoryLabel(session: Session): string {
+    return session.sourceContext?.source || 'repoless';
+  }
+
+  /**
+   * Returns all pull request URLs exposed on session outputs.
+   * @param session - Session payload from the Jules API.
+   * @returns Pull request metadata from the session outputs.
+   */
+  private getPullRequests(session: Session): {
+    url: string;
+    title?: string;
+    description?: string;
+  }[] {
+    return (session.outputs || [])
+      .flatMap((output) => (output.pullRequest ? [output.pullRequest] : []));
+  }
+
+  /**
+   * Finds the most recent change set attached to session activities.
+   * @param activities - Activity list in chronological order.
+   * @returns The latest change set and its source activity, if available.
+   */
+  private getLatestChangeSet(activities: Activity[]): {
+    changeSet?: ChangeSet;
+    activityType?: Activity['type'];
+    timestamp?: string;
+  } {
+    for (let index = activities.length - 1; index >= 0; index -= 1) {
+      const activity = activities[index];
+      const changeSet =
+        activity.sessionCompleted?.changeSet || activity.planGenerated?.changeSet;
+
+      if (changeSet) {
+        return {
+          changeSet,
+          activityType: activity.type,
+          timestamp: activity.timestamp,
+        };
+      }
+    }
+
+    return {};
+  }
 
   /**
    * Resource: jules://sources
@@ -70,7 +121,7 @@ export class JulesResources {
       title: session.title || 'Untitled Task',
       state: session.state || 'UNKNOWN',
       prompt: smartTruncate(session.prompt, 100),
-      repository: session.sourceContext.source,
+      repository: this.getRepositoryLabel(session),
       created: session.createTime,
     }));
 
@@ -79,6 +130,26 @@ export class JulesResources {
         description: 'Recent Jules sessions (tasks). Be mindful of API quotas when querying session history frequently.',
         count: formatted.length,
         sessions: formatted,
+      },
+      null,
+      2
+    );
+  }
+
+  /**
+   * Resource: jules://sessions/{id}/activities
+   * Returns raw activity log for a specific session.
+   *
+   * @param sessionId - The ID of the session.
+   * @returns {Promise<string>} A JSON string representing the activities.
+   */
+  async getSessionActivities(sessionId: string): Promise<string> {
+    const response = await this.client.listActivities(sessionId);
+    return JSON.stringify(
+      {
+        sessionId,
+        count: response.activities.length,
+        activities: response.activities,
       },
       null,
       2
@@ -106,6 +177,7 @@ export class JulesResources {
         const base = {
           type: activity.type,
           timestamp: activity.timestamp,
+          media: activity.media,
         };
 
         // Add type-specific details
@@ -133,12 +205,37 @@ export class JulesResources {
             success: activity.sessionCompleted.success,
             message: activity.sessionCompleted.message,
             pullRequestUrl: activity.sessionCompleted.pullRequestUrl,
+            changeSet: activity.sessionCompleted.changeSet,
+          };
+        }
+
+        if (activity.messageSent) {
+          return {
+            ...base,
+            prompt: activity.messageSent.prompt,
+            sender: activity.messageSent.sender,
+          };
+        }
+
+        if (activity.agentMessaged) {
+          return {
+            ...base,
+            message: activity.agentMessaged.message,
+          };
+        }
+
+        if (activity.planApproved) {
+          return {
+            ...base,
+            approvedAt: activity.planApproved.approvedAt,
           };
         }
 
         return base;
       }
     );
+
+    const pullRequests = this.getPullRequests(session);
 
     return JSON.stringify(
       {
@@ -147,15 +244,54 @@ export class JulesResources {
           title: session.title,
           state: session.state,
           prompt: session.prompt,
-          repository: session.sourceContext.source,
+          url: session.url,
+          repository: this.getRepositoryLabel(session),
           branch:
-            session.sourceContext.githubRepoContext?.startingBranch || 'main',
+            session.sourceContext?.githubRepoContext?.startingBranch || 'main',
           automationMode: session.automationMode,
           requirePlanApproval: session.requirePlanApproval,
           created: session.createTime,
           updated: session.updateTime,
+          pullRequests,
         },
         activities: formattedActivities,
+      },
+      null,
+      2
+    );
+  }
+
+  /**
+   * Resource: jules://sessions/{id}/diff
+   * Returns the latest change set surfaced by Jules for the session.
+   *
+   * @param sessionId - The ID of the session to inspect.
+   * @returns {Promise<string>} A JSON string representing the latest patch and file-level changes.
+   */
+  async getSessionDiff(sessionId: string): Promise<string> {
+    const response = await this.client.listActivities(sessionId);
+    const latest = this.getLatestChangeSet(response.activities);
+
+    if (!latest.changeSet) {
+      return JSON.stringify(
+        {
+          sessionId,
+          message:
+            'No changeSet is available yet. The session may still be in progress or has not produced a diff.',
+        },
+        null,
+        2
+      );
+    }
+
+    return JSON.stringify(
+      {
+        sessionId,
+        activityType: latest.activityType,
+        timestamp: latest.timestamp,
+        patch: latest.changeSet.patch,
+        fileCount: latest.changeSet.changes?.length || 0,
+        changes: latest.changeSet.changes || [],
       },
       null,
       2

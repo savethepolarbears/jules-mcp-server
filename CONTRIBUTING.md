@@ -33,6 +33,7 @@ npm run dev
 ### Development Workflow
 
 1. **Create a branch:**
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
@@ -43,17 +44,20 @@ npm run dev
    - Test manually with Claude Desktop
 
 3. **Verify build:**
+
    ```bash
    npm run build
    ```
 
 4. **Commit changes:**
+
    ```bash
    git add .
    git commit -m "Add: description of your changes"
    ```
 
 5. **Push and create PR:**
+
    ```bash
    git push origin feature/your-feature-name
    ```
@@ -68,7 +72,8 @@ npm run dev
 - **Explicit return types:** All functions should declare return type
 - **Const:** Use `const` by default, `let` only when needed
 
-**Example:**
+#### Example
+
 ```typescript
 // Good
 async function getSession(id: string): Promise<Session> {
@@ -104,7 +109,8 @@ async function getSession(id: any) {
 - **Type annotations:** Use TypeScript types as documentation
 - **README updates:** Update docs when adding features
 
-**Example:**
+#### Example
+
 ```typescript
 /**
  * Creates a new Jules coding session
@@ -132,6 +138,7 @@ Currently, testing is manual via Claude Desktop:
 ### Future: Automated Tests
 
 We plan to add:
+
 - **Unit tests:** Jest or Vitest
 - **Integration tests:** Test against mock Jules API
 - **E2E tests:** Full MCP protocol flow
@@ -149,17 +156,17 @@ We plan to add:
 
 ### Medium Priority
 
-5. **HTTP transport** - Support for remote deployments
-6. **Webhook integration** - Real-time notifications (when Jules API supports)
-7. **Session templates** - Save and reuse common task configurations
-8. **Logging improvements** - Structured logging with levels
+1. **HTTP transport** - Support for remote deployments
+2. **Webhook integration** - Real-time notifications (when Jules API supports)
+3. **Session templates** - Save and reuse common task configurations
+4. **Logging improvements** - Structured logging with levels
 
 ### Nice to Have
 
-9. **Web dashboard** - Visual interface for schedule management
-10. **Metrics** - Usage analytics and success rates
-11. **Multi-user support** - Per-user API keys
-12. **Advanced scheduling** - Conditional execution, dependency chains
+1. **Web dashboard** - Visual interface for schedule management
+2. **Metrics** - Usage analytics and success rates
+3. **Multi-user support** - Per-user API keys
+4. **Advanced scheduling** - Conditional execution, dependency chains
 
 ## Pull Request Guidelines
 
@@ -205,7 +212,7 @@ We plan to add:
 
 Use conventional commits:
 
-```
+```text
 <type>: <description>
 
 [optional body]
@@ -213,7 +220,8 @@ Use conventional commits:
 [optional footer]
 ```
 
-**Types:**
+### Types
+
 - `feat:` - New feature
 - `fix:` - Bug fix
 - `docs:` - Documentation only
@@ -221,8 +229,9 @@ Use conventional commits:
 - `test:` - Adding tests
 - `chore:` - Tooling, dependencies
 
-**Examples:**
-```
+#### Examples
+
+```text
 feat: add webhook support for session events
 
 Implements real-time notifications when Jules completes tasks.
@@ -231,7 +240,7 @@ Requires Jules API v2 when available.
 Closes #42
 ```
 
-```
+```text
 fix: handle corrupted schedules.json gracefully
 
 Adds JSON validation and creates new file if corrupted.
@@ -252,6 +261,7 @@ Adds JSON validation and creates new file if corrupted.
 ### For Contributors
 
 Before requesting review:
+
 - [ ] Self-review your diff
 - [ ] Remove debug code
 - [ ] Fix typos
@@ -292,6 +302,7 @@ Before requesting review:
 **DO NOT** open public issues for security bugs.
 
 Instead:
+
 1. Email security concerns to maintainers
 2. Use GitHub Security Advisories (if available)
 3. Provide detailed reproduction steps
@@ -301,14 +312,16 @@ Instead:
 
 Documentation improvements are always welcome!
 
-**Areas to improve:**
+### Areas to improve
+
 - Clarify confusing sections
 - Add more examples
 - Fix typos or grammar
 - Add diagrams or illustrations
 - Translate to other languages
 
-**Process:**
+#### Process
+
 1. Edit markdown files
 2. Verify markdown renders correctly
 3. Submit PR with changes
@@ -341,12 +354,14 @@ Before submitting a feature request:
 
 ### Debugging
 
-**Enable debug logging:**
+#### Enable debug logging
+
 ```bash
 LOG_LEVEL=debug npm run dev
 ```
 
-**Test individual components:**
+#### Test individual components
+
 ```typescript
 // Test Jules client
 import { JulesClient } from './src/api/jules-client';
@@ -355,22 +370,26 @@ const sources = await client.listSources();
 console.log(sources);
 ```
 
-**Inspect schedules:**
+#### Inspect schedules
+
 ```bash
 cat ~/.jules-mcp/schedules.json | jq
 ```
 
 ### Common Issues
 
-**"Cannot find module"**
+#### "Cannot find module"
+
 - Run `npm install`
 - Verify `node_modules/` exists
 
-**"Type error in compiled code"**
+#### "Type error in compiled code"
+
 - Run `npm run typecheck`
 - Fix TypeScript errors before building
 
-**"Server not responding in Claude"**
+#### "Server not responding in Claude"
+
 - Check path in `claude_desktop_config.json`
 - Verify `dist/index.js` exists and is executable
 - Check Claude Desktop console for errors

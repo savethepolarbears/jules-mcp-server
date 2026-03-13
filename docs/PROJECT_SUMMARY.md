@@ -9,12 +9,14 @@ A **production-ready Model Context Protocol (MCP) server** that bridges Google's
 ### Core Implementation (1,880 lines of TypeScript)
 
 #### 1. Complete Jules API Client (`src/api/jules-client.ts`)
+
 - Full coverage of all 8 v1alpha endpoints
 - Type-safe interfaces for all requests/responses
 - Robust error handling with custom `JulesAPIError` class
 - Authentication via `X-Goog-Api-Key` header
 
 #### 2. Local Scheduling Engine (`src/scheduler/cron-engine.ts`)
+
 - Built on `node-schedule` for cross-platform cron support
 - Persistent storage in `~/.jules-mcp/schedules.json`
 - Automatic schedule hydration on startup
@@ -22,6 +24,7 @@ A **production-ready Model Context Protocol (MCP) server** that bridges Google's
 - Graceful shutdown with cleanup
 
 #### 3. MCP Resources (5 resources in `src/mcp/resources.ts`)
+
 - `jules://sources` - Connected repositories
 - `jules://sessions/list` - Recent sessions
 - `jules://sessions/{id}/full` - Session details with activities
@@ -29,6 +32,7 @@ A **production-ready Model Context Protocol (MCP) server** that bridges Google's
 - `jules://schedules/history` - Execution audit trail
 
 #### 4. MCP Tools (6 tools in `src/mcp/tools.ts`)
+
 - `create_coding_task` - Immediate session creation
 - `manage_session` - Approve plans, send feedback
 - `get_session_status` - Poll progress
@@ -37,6 +41,7 @@ A **production-ready Model Context Protocol (MCP) server** that bridges Google's
 - `delete_schedule` - Remove schedules
 
 #### 5. MCP Prompts (5 templates in `src/mcp/prompts.ts`)
+
 - `refactor_module` - Guided refactoring
 - `setup_weekly_maintenance` - Automated maintenance
 - `audit_security` - Security scanning
@@ -44,6 +49,7 @@ A **production-ready Model Context Protocol (MCP) server** that bridges Google's
 - `update_dependencies` - Dependency management
 
 #### 6. Type System (`src/types/`)
+
 - Complete TypeScript interfaces for Jules API
 - Schedule data models
 - Strict type checking with Zod validation
@@ -67,7 +73,7 @@ A **production-ready Model Context Protocol (MCP) server** that bridges Google's
 
 **Solution:** The MCP server implements its own scheduling infrastructure:
 
-```
+```text
 Local State (MCP Server)          Remote State (Jules API)
 ├─ schedules.json                 ├─ Sessions
 ├─ Cron engine                    ├─ Activities
@@ -75,7 +81,8 @@ Local State (MCP Server)          Remote State (Jules API)
 └─ [Triggers] ──────────────────────→ [Creates Sessions]
 ```
 
-**Benefits:**
+#### Benefits
+
 - Schedules survive server restarts
 - Works with current API (no waiting for Google)
 - Zero network calls when idle
@@ -94,7 +101,7 @@ Jules sessions are long-running (minutes to hours). The MCP implementation handl
 
 Multiple defense layers:
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │ Environment Validation                  │
 │ └─ JULES_API_KEY required               │
@@ -123,7 +130,7 @@ Multiple defense layers:
 ### Technology Stack
 
 | Component | Technology | Version | Rationale |
-|-----------|-----------|---------|-----------|
+| ----------- | ----------- | --------- | ----------- |
 | Runtime | Node.js | >=18.0.0 | Native fetch API, modern ESM |
 | Language | TypeScript | ^5.7.2 | Type safety, maintainability |
 | MCP SDK | @modelcontextprotocol/sdk | ^1.0.4 | Official MCP implementation |
@@ -134,7 +141,7 @@ Multiple defense layers:
 ### API Coverage Matrix
 
 | Jules API Endpoint | MCP Mapping | Coverage |
-|-------------------|-------------|----------|
+| ------------------- | ------------- | ---------- |
 | `GET /sources` | Resource: `jules://sources` | ✅ Full |
 | `GET /sources/{name}` | Included in session full resource | ✅ Full |
 | `POST /sessions` | Tool: `create_coding_task` | ✅ Full |
@@ -149,7 +156,7 @@ Multiple defense layers:
 ### Beyond the API: Added Capabilities
 
 | Feature | Implementation | Persistence |
-|---------|---------------|-------------|
+| --------- | --------------- | ------------- |
 | Recurring schedules | Local cron engine | `~/.jules-mcp/schedules.json` |
 | Execution history | Schedule metadata | Same file |
 | Next run calculation | `node-schedule` | Memory |
@@ -196,6 +203,7 @@ Multiple defense layers:
 ### Pattern 1: Interactive Development
 
 Developer uses Claude Desktop to:
+
 1. Ask Jules to fix bugs during code review
 2. Request refactoring during feature work
 3. Generate tests for new code
@@ -205,6 +213,7 @@ Developer uses Claude Desktop to:
 ### Pattern 2: Scheduled Maintenance
 
 Team sets up automated tasks:
+
 1. Weekly dependency updates
 2. Monthly security audits
 3. Daily linter fixes
@@ -214,6 +223,7 @@ Team sets up automated tasks:
 ### Pattern 3: Autonomous Agent
 
 Advanced: AI agent orchestrates complex workflows:
+
 1. Detects failing tests in CI
 2. Creates Jules task to fix
 3. Monitors progress
@@ -295,16 +305,17 @@ Advanced: AI agent orchestrates complex workflows:
 
 This implementation synthesized information from:
 
-- **Jules API Documentation:** https://developers.google.com/jules/api
-- **Jules Product Docs:** https://jules.google/docs/
-- **MCP Specification:** https://modelcontextprotocol.io
-- **MCP TypeScript SDK:** https://github.com/modelcontextprotocol/typescript-sdk
+- **Jules API Documentation:** <https://developers.google.com/jules/api>
+- **Jules Product Docs:** <https://jules.google/docs/>
+- **MCP Specification:** <https://modelcontextprotocol.io>
+- **MCP TypeScript SDK:** <https://github.com/modelcontextprotocol/typescript-sdk>
 - **Community Reference Implementations:** Open-source Jules MCP servers
 - **Architectural Blueprints:** Provided specification documents
 
 ## Deliverables Summary
 
 ### Code
+
 - ✅ 9 TypeScript source modules
 - ✅ Complete type definitions
 - ✅ Full API client implementation
@@ -313,6 +324,7 @@ This implementation synthesized information from:
 - ✅ 100% TypeScript strict mode compliance
 
 ### Documentation
+
 - ✅ 8 comprehensive markdown guides
 - ✅ API reference with all tools/resources
 - ✅ 17+ practical examples
@@ -321,6 +333,7 @@ This implementation synthesized information from:
 - ✅ Configuration templates
 
 ### Infrastructure
+
 - ✅ TypeScript configuration
 - ✅ Build scripts
 - ✅ Package.json with proper module setup
@@ -333,6 +346,7 @@ This implementation synthesized information from:
 This Jules MCP Server represents a **complete, production-ready implementation** of the Model Context Protocol for Google Jules. It addresses the unique challenge of bridging a stateless API with stateful scheduling requirements through innovative local persistence and cron management. The resulting system enables true autonomous coding workflows where AI assistants can delegate work to Jules, schedule recurring maintenance, and manage complex multi-step coding tasks—all while maintaining security, auditability, and human oversight.
 
 The project is ready for:
+
 - Immediate use by individual developers
 - Team deployment (with security configuration)
 - Community contributions and extensions

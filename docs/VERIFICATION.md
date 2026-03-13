@@ -10,7 +10,8 @@ All claimed features have been verified as **actually implemented with real logi
 
 **Claim:** "Repository access controlled via JULES_ALLOWED_REPOS"
 
-**Evidence:**
+#### Evidence
+
 ```typescript
 // src/index.ts:49 - Initialization
 RepositoryValidator.initialize();
@@ -35,7 +36,8 @@ static validateRepository(source: string): void {
 }
 ```
 
-**Runtime Behavior:**
+#### Runtime Behavior
+
 - If `JULES_ALLOWED_REPOS=myorg/repo1,myorg/repo2`
 - Attempt to create task with `source: "sources/github/myorg/repo3"`
 - **Result:** Error thrown, API call never made
@@ -45,7 +47,8 @@ static validateRepository(source: string): void {
 
 **Claim:** "Scheduled tasks retry 3 times with exponential backoff"
 
-**Evidence:**
+#### Evidence
+
 ```typescript
 // src/scheduler/cron-engine.ts:85-101
 const session = await retryWithBackoff(
@@ -79,7 +82,8 @@ export async function retryWithBackoff<T>(
 }
 ```
 
-**Runtime Behavior:**
+#### Runtime Behavior
+
 - Scheduled task fires at cron time
 - API call to Jules fails (network error)
 - **Retry 1:** Wait 2 seconds, try again
@@ -92,7 +96,8 @@ export async function retryWithBackoff<T>(
 
 **Claim:** "Error handling extracted to helper method"
 
-**Evidence:**
+#### Evidence
+
 ```typescript
 // src/mcp/tools.ts:133-151 - Real helper implementation
 private async executeWithErrorHandling<T>(
@@ -124,7 +129,8 @@ private async executeWithErrorHandling<T>(
 // - deleteSchedule (line 347)
 ```
 
-**Runtime Behavior:**
+#### Runtime Behavior
+
 - Tool called with invalid input
 - Zod validation throws error
 - Helper catches, formats as `{ success: false, error: "..." }`
@@ -135,7 +141,8 @@ private async executeWithErrorHandling<T>(
 
 **Claim:** "Truncates at word boundaries, not mid-word"
 
-**Evidence:**
+#### Evidence
+
 ```typescript
 // src/utils/security.ts:57-71 - Real algorithm
 export function smartTruncate(text: string, maxLength: number): string {
@@ -160,7 +167,8 @@ export function smartTruncate(text: string, maxLength: number): string {
 // - tools.ts:326 (list_schedules prompts)
 ```
 
-**Runtime Behavior:**
+#### Runtime Behavior
+
 - Input: "Update all dependencies to their latest versions and run tests"
 - maxLength: 30
 - **Simple substring:** "Update all dependencies to th..."
@@ -171,7 +179,8 @@ export function smartTruncate(text: string, maxLength: number): string {
 
 **Claim:** "Test jobs are properly canceled"
 
-**Evidence:**
+#### Evidence
+
 ```typescript
 // src/scheduler/cron-engine.ts:53-68 - Real fix
 static validateCronExpression(expression: string): boolean {
@@ -190,13 +199,15 @@ static validateCronExpression(expression: string): boolean {
 }
 ```
 
-**Before Fix:**
+#### Before Fix
+
 ```typescript
 schedule.scheduleJob(expression, () => {}); // Job leaked!
 return true;
 ```
 
-**After Fix:**
+#### After Fix
+
 ```typescript
 const testJob = schedule.scheduleJob(expression, () => {});
 if (!testJob) return false;
@@ -210,7 +221,8 @@ return true;
 
 **Claim:** "Schedules persist to ~/.jules-mcp/schedules.json"
 
-**Evidence:**
+#### Evidence
+
 ```typescript
 // src/storage/schedule-store.ts:15-17 - Real file path construction
 constructor() {
@@ -232,7 +244,8 @@ async save(store: ScheduleStore): Promise<void> {
 }
 ```
 
-**Runtime Behavior:**
+#### Runtime Behavior
+
 1. User calls `schedule_recurring_task`
 2. Server creates `ScheduledTask` object
 3. Calls `storage.upsertTask(task)`
@@ -247,7 +260,8 @@ async save(store: ScheduleStore): Promise<void> {
 
 **Claim:** "Schedules survive server restarts"
 
-**Evidence:**
+#### Evidence
+
 ```typescript
 // src/scheduler/cron-engine.ts:27-47 - Real initialization
 async initialize(): Promise<void> {
@@ -267,7 +281,8 @@ async initialize(): Promise<void> {
 }
 ```
 
-**Runtime Behavior:**
+#### Runtime Behavior
+
 1. Server starts
 2. Reads `~/.jules-mcp/schedules.json`
 3. Parses JSON
@@ -281,7 +296,8 @@ async initialize(): Promise<void> {
 
 **Claim:** "Full coverage of Jules v1alpha API"
 
-**Evidence:**
+#### Evidence
+
 ```typescript
 // src/api/jules-client.ts - All 8 endpoints implemented with REAL HTTP calls
 
@@ -307,7 +323,8 @@ async approvePlan(sessionId: string): Promise<Session> {
 }
 ```
 
-**Runtime Behavior:**
+#### Runtime Behavior
+
 - Tool calls `client.createSession()`
 - `request()` method constructs URL: `https://jules.googleapis.com/v1alpha/sessions`
 - Sets headers: `{ 'X-Goog-Api-Key': apiKey, 'Content-Type': 'application/json' }`
@@ -322,13 +339,13 @@ async approvePlan(sessionId: string): Promise<Session> {
 All production dependencies are **actively used** in the codebase:
 
 | Dependency | Usage Count | Files Using It |
-|------------|-------------|----------------|
+| ------------ | ------------- | ---------------- |
 | `@modelcontextprotocol/sdk` | 8 imports | index.ts (Server, Transport, Types) |
 | `node-schedule` | 2 imports | cron-engine.ts (Job, schedule) |
 | `zod` | 7 schemas | tools.ts (all tool schemas) |
 | `dotenv` | 1 import | index.ts (config loading) |
 
-**No unused dependencies found.**
+### No unused dependencies found
 
 ## Code Reuse Verification
 
@@ -341,15 +358,15 @@ All production dependencies are **actively used** in the codebase:
 3. **retryWithBackoff** - Used in scheduled task execution
 4. **executeWithErrorHandling** - Used in all 6 tool methods
 
-**No orphaned utilities. All are serving a purpose.**
+### No orphaned utilities. All are serving a purpose
 
 ## Integration Verification
 
 **Question:** "Does the code integrate properly?"
 
-**Evidence:**
+### Evidence
 
-```
+```text
 MCP Host (Claude Desktop)
     ↓
 stdin/stdout (JSON-RPC 2.0)
@@ -375,7 +392,8 @@ Formatted JSON response
 stdout → MCP Host → User sees result
 ```
 
-**Integration Points All Verified:**
+#### Integration Points All Verified
+
 - ✅ MCP SDK properly used (not just imported)
 - ✅ Jules API actually called (not mocked)
 - ✅ Storage actually persists (not in-memory only)
@@ -443,17 +461,20 @@ async tool(args): Promise<string> {
 
 ### Existing Code That Now Benefits
 
-**Before utilities were created:**
+#### Before utilities were created
+
 - Simple `substring()` used → Could break mid-word
 - No retry logic → Failed immediately on errors
 - No validation → Relied only on type checking
 
-**After utilities applied:**
+#### After utilities applied
+
 - `smartTruncate()` → Clean word-boundary breaks
 - `retryWithBackoff()` → Resilient to transient failures
 - `RepositoryValidator` → Real security enforcement
 
-**These utilities were applied to:**
+#### These utilities were applied to
+
 - All prompt truncations (7 locations)
 - All scheduled task executions (1 critical location)
 - All task creation flows (2 security checkpoints)
@@ -461,6 +482,7 @@ async tool(args): Promise<string> {
 ## Final Verification
 
 ### Build Verification
+
 ```bash
 ✅ npm run build       # Compiles successfully
 ✅ npm run typecheck   # Zero TypeScript errors
@@ -468,6 +490,7 @@ async tool(args): Promise<string> {
 ```
 
 ### Security Verification
+
 ```bash
 ✅ No API keys in git
 ✅ .env excluded
@@ -478,6 +501,7 @@ async tool(args): Promise<string> {
 ```
 
 ### Functional Verification
+
 ```bash
 ✅ 8/8 Jules API endpoints wrapped
 ✅ 6/6 MCP tools implemented
@@ -497,6 +521,6 @@ This implementation:
 4. **Is consistent** - Patterns applied uniformly
 5. **Is complete** - All claimed features implemented
 
-**No hardcoded values. No placeholder functions. No mock implementations.**
+### No hardcoded values. No placeholder functions. No mock implementations
 
-**Status: VERIFIED FOR PRODUCTION USE ✅**
+#### Status: VERIFIED FOR PRODUCTION USE ✅

@@ -35,6 +35,7 @@ coverage/
 
 # Claude Code specific files - Contains user-specific configuration
 .claude/
+.agent/
 AGENTS.md
 CLAUDE.md
 GEMINI.md
@@ -46,7 +47,7 @@ GEMINI.md
 .jules-mcp/
 
 # Research and design documents - Not needed for users
-docs/
+# docs/
 *.docx
 *.pdf
 
@@ -56,3 +57,13 @@ Context/
 .contextkit/
 *contextkit*
 *ContextKit*
+
+# Serena AI tool
+.serena/
+
+# Gemini IDE
+.gemini*
+
+# Piece build output
+pieces/*/dist/
+pieces/*/node_modules/
