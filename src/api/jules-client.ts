@@ -17,7 +17,7 @@ import type {
 /**
  * Custom error class for Jules API interactions.
  */
-class JulesAPIError extends Error {
+export class JulesAPIError extends Error {
   /**
    * Creates an instance of JulesAPIError.
    * @param message - The error message.
@@ -100,6 +100,11 @@ export class JulesClient {
     let lastError: unknown;
 
     while (attempt <= this.maxRetries) {
+      if (attempt > 0) {
+        const delay = Math.pow(2, attempt - 1) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
@@ -112,7 +117,13 @@ export class JulesClient {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          const errorBody = await response.text();
+          const rawErrorBody = await response.text();
+          // SECURE: Truncate error body to prevent log flooding or PII leakage
+          const errorBody =
+            rawErrorBody.length > 500
+              ? rawErrorBody.substring(0, 500) + '... [truncated]'
+              : rawErrorBody;
+
           // Retry on transient 5xx
           if (response.status >= 500 && attempt < this.maxRetries) {
             attempt++;
@@ -133,15 +144,18 @@ export class JulesClient {
         return (await response.json()) as T;
       } catch (error) {
         clearTimeout(timeoutId);
+
+        // Rethrow 4xx JulesAPIErrors immediately — do not retry client errors
+        if (error instanceof JulesAPIError) {
+          throw error;
+        }
+
         const isAbort =
           error instanceof Error && error.name === 'AbortError';
         if ((isAbort || error instanceof Error) && attempt < this.maxRetries) {
           attempt++;
           lastError = error;
           continue;
-        }
-        if (error instanceof JulesAPIError) {
-          throw error;
         }
         throw new JulesAPIError(
           `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -155,6 +169,48 @@ export class JulesClient {
         lastError instanceof Error ? lastError.message : 'Unknown error'
       }`
     );
+  }
+
+  /**
+   * Generic HTTP request handler for endpoints that return an empty body (e.g. 204 No Content).
+   * @param endpoint - The API endpoint.
+   * @param options - Fetch options (method, headers, body, etc.).
+   * @returns A promise resolving to an empty object.
+   */
+  private async requestEmpty(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<Record<string, unknown>> {
+    const url = `${this.baseURL}${endpoint}`;
+    const headers = {
+      'X-Goog-Api-Key': this.apiKey,
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await fetch(url, { ...options, headers, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new JulesAPIError(
+          `Jules API error: ${response.statusText}`,
+          response.status,
+          errorBody
+        );
+      }
+      // Body may be empty (204 No Content) — return {} rather than trying to parse JSON
+      const text = await response.text();
+      return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof JulesAPIError) throw error;
+      throw new JulesAPIError(
+        `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
   }
 
   /**
@@ -298,7 +354,7 @@ export class JulesClient {
    * @returns A promise that resolves with the empty response.
    */
   async deleteSession(sessionId: string): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(`/sessions/${sessionId}`, {
+    return this.requestEmpty(`/sessions/${sessionId}`, {
       method: 'DELETE',
     });
   }
@@ -310,7 +366,7 @@ export class JulesClient {
    * @returns A promise that resolves with the empty response.
    */
   async rejectPlan(sessionId: string): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(`/sessions/${sessionId}`, {
+    return this.requestEmpty(`/sessions/${sessionId}`, {
       method: 'DELETE',
     });
   }
