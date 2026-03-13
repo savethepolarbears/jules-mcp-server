@@ -75,7 +75,7 @@ describe('RepositoryValidator', () => {
 
       expect(() => {
         RepositoryValidator.validateRepository('sources/github/owner/repo2');
-      }).toThrow(/Repository "owner\/repo2" is not in the allowed repositories list/);
+      }).toThrow(/Repository "owner\/repo2" is not in the allowed list/);
     });
   });
 });

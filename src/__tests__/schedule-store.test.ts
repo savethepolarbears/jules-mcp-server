@@ -21,7 +21,7 @@ describe('ScheduleStorage', () => {
   });
 
   // Helper to generate valid encrypted payload for tests
-  const createEncryptedPayload = (data: any) => {
+  const createEncryptedPayload = (data: unknown) => {
     const key = crypto.scryptSync('test-key', 'salt', 32);
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
@@ -37,8 +37,7 @@ describe('ScheduleStorage', () => {
   describe('load', () => {
     it('should initialize empty store on ENOENT error', async () => {
       // Setup error to simulate no file
-      const error: any = new Error('ENOENT');
-      error.code = 'ENOENT';
+      const error = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
       vi.mocked(fsPromises.readFile).mockRejectedValueOnce(error);
 
       // We expect it to write the new empty store
@@ -90,7 +89,7 @@ describe('ScheduleStorage', () => {
       const mockStore = { schedules: {}, version: '1.0.0' };
       await storage.save(mockStore);
 
-      expect(fsPromises.writeFile).toHaveBeenCalledWith(expect.stringContaining('.tmp'), expect.any(String), 'utf-8');
+      expect(fsPromises.writeFile).toHaveBeenCalledWith(expect.stringContaining('.tmp'), expect.any(String), expect.objectContaining({ encoding: 'utf-8' }));
       expect(fsPromises.rename).toHaveBeenCalledWith(expect.stringContaining('.tmp'), expect.stringContaining('schedules.enc'));
     });
   });
