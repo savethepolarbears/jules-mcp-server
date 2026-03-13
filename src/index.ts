@@ -8,6 +8,7 @@ import 'dotenv/config';
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
 import {
   CallToolRequestSchema,
   ListResourcesRequestSchema,
@@ -84,7 +85,7 @@ class JulesMCPServer {
       this.client,
       (msg) => {
         // Log to MCP client
-        this.server.sendLoggingMessage({
+        void this.server.sendLoggingMessage({
           level: 'info',
           data: msg,
         });
@@ -273,7 +274,7 @@ class JulesMCPServer {
         {
           name: 'manage_session',
           description:
-            'Manage an active Jules session: approve plans or send feedback',
+            'Manage an active Jules session: approve or reject plans, or send feedback',
           inputSchema: {
             type: 'object',
             properties: {
@@ -512,6 +513,7 @@ class JulesMCPServer {
             throw new Error(`Unknown tool: ${name}`);
         }
 
+        const parsed = JSON.parse(result);
         return {
           content: [
             {
@@ -519,17 +521,15 @@ class JulesMCPServer {
               text: result,
             },
           ],
+          isError: parsed.success === false,
         };
       } catch (error) {
-        const errorMsg =
-          error instanceof Error ? error.message : 'Unknown error';
+        const isZod = error instanceof z.ZodError;
+        const msg = isZod
+          ? 'Validation failed. Check input format and required parameters.'
+          : 'An internal error occurred. Please check server logs.';
         return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ success: false, error: errorMsg }),
-            },
-          ],
+          content: [{ type: 'text', text: JSON.stringify({ success: false, error: msg }) }],
           isError: true,
         };
       }
@@ -596,14 +596,14 @@ class JulesMCPServer {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown error';
-      this.server.sendLoggingMessage({
+      void this.server.sendLoggingMessage({
         level: 'error',
         data: `Scheduler initialization failed: ${message}`,
       });
     }
 
     // Log startup
-    this.server.sendLoggingMessage({
+    void this.server.sendLoggingMessage({
       level: 'info',
       data: 'Jules MCP Server started successfully',
     });

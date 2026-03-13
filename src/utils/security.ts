@@ -2,6 +2,20 @@
  * Security utilities for repository access control and validation.
  */
 
+export class SecurityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SecurityError';
+  }
+}
+
+export class RateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RateLimitError';
+  }
+}
+
 /**
  * Validates repository access based on an optional allowlist.
  * Ensures that operations are only performed on authorized repositories.
@@ -38,13 +52,13 @@ export class RepositoryValidator {
   static validateRepository(source: string): void {
     // SECURE: Default to DENY if no allowlist is configured
     if (!this.allowedRepos || this.allowedRepos.length === 0) {
-      throw new Error(
+      throw new SecurityError(
         "Security Error: No repositories are allowed. Set JULES_ALLOWED_REPOS environment variable."
       );
     }
 
     // Extract owner/repo from source format: sources/github/owner/repo
-    const match = source.match(/^sources\/github\/(.+)$/);
+    const match = /^sources\/github\/(.+)$/.exec(source);
     if (!match) {
       throw new Error(
         `Invalid source format: ${source}. Expected sources/github/owner/repo`
@@ -54,10 +68,9 @@ export class RepositoryValidator {
     const repoPath = match[1];
 
     if (!this.allowedRepos.includes(repoPath)) {
-      throw new Error(
-        `Repository "${repoPath}" is not in the allowed repositories list. ` +
-          `Allowed: ${this.allowedRepos.join(', ')}. ` +
-          `Set JULES_ALLOWED_REPOS environment variable to modify this list.`
+      throw new SecurityError(
+        `Security Error: Repository "${repoPath}" is not in the allowed list. ` +
+          `Set JULES_ALLOWED_REPOS environment variable to authorize additional repositories.`
       );
     }
   }
@@ -77,7 +90,7 @@ export class RepositoryValidator {
    * @returns {string[] | null} The list of allowed repositories, or null if no allowlist is configured.
    */
   static getAllowedRepositories(): string[] | null {
-    return this.allowedRepos;
+    return this.allowedRepos ? [...this.allowedRepos] : null;
   }
 }
 
@@ -178,7 +191,13 @@ export function containsSecret(text: string): boolean {
   const patterns = [
     /sk-[a-zA-Z0-9]{20,}/,    // OpenAI / general secret keys
     /AIza[0-9A-Za-z-_]{35}/, // Google API keys
-    /(xox[p|b|o|a]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32})/ // Slack tokens
+    /ghp_[a-zA-Z0-9]{36}/,    // GitHub personal access token
+    /ghs_[a-zA-Z0-9]{36}/,    // GitHub server token
+    /github_pat_[a-zA-Z0-9_]{82}/, // GitHub fine-grained PAT
+    /AKIA[0-9A-Z]{16}/,       // AWS access key
+    /sk-ant-[a-zA-Z0-9_-]{93}/, // Anthropic API key
+    /hf_[a-zA-Z0-9]{37}/,      // HuggingFace token
+    /xox[pboa]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32}/ // Slack tokens
   ];
   return patterns.some(pattern => pattern.test(text));
 }

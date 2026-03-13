@@ -1,0 +1,24 @@
+{
+  "name": "@activepieces/piece-jules",
+  "version": "0.1.0",
+  "description": "Activepieces piece for Google Jules coding agent API",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@activepieces/pieces-common": "0.12.0",
+    "@activepieces/pieces-framework": "0.12.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "peerDependencies": {
+    "@activepieces/pieces-common": "0.12.0",
+    "@activepieces/pieces-framework": "0.12.0"
+  },
+  "license": "MIT"
+}

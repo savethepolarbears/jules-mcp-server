@@ -109,7 +109,7 @@ export interface Session {
   /** Timestamp when last updated */
   updateTime?: string;
   /** Session outputs such as generated pull requests */
-  outputs?: Array<{
+  outputs?: {
     /** Pull request created by the session, if available */
     pullRequest?: {
       /** Pull request URL */
@@ -119,7 +119,7 @@ export interface Session {
       /** Optional pull request description */
       description?: string;
     };
-  }>;
+  }[];
 }
 
 /**
@@ -172,7 +172,7 @@ export interface ChangeSet {
   /** Unified patch for the full change set */
   patch?: string;
   /** Array of file changes */
-  changes?: Array<{
+  changes?: {
     /** The path of the file changed. */
     path: string;
     /** The diff of the changes. */
@@ -181,7 +181,7 @@ export interface ChangeSet {
     oldContent?: string;
     /** The new content of the file. */
     newContent?: string;
-  }>;
+  }[];
 }
 
 /**

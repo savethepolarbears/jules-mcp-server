@@ -10,7 +10,7 @@ import type { ScheduleStorage } from '../storage/schedule-store.js';
 import { CronEngine } from '../scheduler/cron-engine.js';
 import type { ScheduledTask } from '../types/schedule.js';
 import type { Session, SessionState } from '../types/jules-api.js';
-import { RepositoryValidator, smartTruncate, containsSecret, RateLimiter } from '../utils/security.js';
+import { RepositoryValidator, smartTruncate, containsSecret, RateLimitError, SecurityError, RateLimiter } from '../utils/security.js';
 
 // Input validation schemas
 export const CreateTaskSchema = z.object({
@@ -34,7 +34,8 @@ export const CreateTaskSchema = z.object({
     ),
   branch: z
     .string()
-    .regex(/^[\w/-]+$/, 'Branch name contains invalid characters')
+    .regex(/^[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*$/, 'Branch name contains invalid characters')
+    .max(255, 'Branch name too long')
     .default('main')
     .describe('Git branch to base changes on'),
   auto_create_pr: z
@@ -124,7 +125,7 @@ export const GetActivitiesSinceSchema = z.object({
     .describe('The ID of the session to inspect'),
   since: z
     .string()
-    .refine((value) => !Number.isNaN(Date.parse(value)), 'since must be a valid ISO 8601 timestamp')
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/, 'since must be a valid UTC ISO 8601 timestamp')
     .describe('ISO 8601 timestamp used as the lower bound'),
   page_size: z
     .number()
@@ -136,7 +137,7 @@ export const GetActivitiesSinceSchema = z.object({
 });
 
 export const GetSessionStatusSchema = z.object({
-  session_id: z.string().describe('The ID of the session to check'),
+  session_id: z.string().regex(/^[\w-]+$/, 'Session ID contains invalid characters').describe('The ID of the session to check'),
 });
 
 export const ScheduleTaskSchema = z.object({
@@ -167,7 +168,8 @@ export const ScheduleTaskSchema = z.object({
     .describe('Repository resource name (sources/github/owner/repo)'),
   branch: z
     .string()
-    .regex(/^[\w/-]+$/, 'Branch name contains invalid characters')
+    .regex(/^[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*$/, 'Branch name contains invalid characters')
+    .max(255, 'Branch name too long')
     .default('main')
     .describe('Git branch to target'),
   auto_create_pr: z
@@ -220,7 +222,7 @@ export class JulesTools {
     private readonly storage: ScheduleStorage,
     private readonly scheduler: CronEngine
   ) {
-    // Limit to 10 requests per minute to prevent accidental runaway execution
+    // Rate limiting applies only to task creation (write operations). Read/poll operations are intentionally exempt.
     this.rateLimiter = new RateLimiter(10, 60000);
   }
 
@@ -285,19 +287,18 @@ export class JulesTools {
 
       return JSON.stringify(result);
     } catch (error) {
-      const isValidationError = error instanceof z.ZodError || (error instanceof Error && error.message.includes('Validation'));
-      
-      // Log full error internally
-      console.error('Tool execution error:', error);
-      
-      const errorMsg = isValidationError && error instanceof Error 
-        ? error.message 
-        : (error instanceof Error && error.message.includes('Security Error')) 
-          ? error.message
-          : (error instanceof Error && error.message.includes('Rate limit'))
-            ? error.message
-            : 'An internal error occurred. Please check server logs.';
-          
+      const isPassthrough = 
+        error instanceof z.ZodError ||
+        error instanceof SecurityError ||
+        error instanceof RateLimitError;
+
+      const logMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Tool execution error: ${logMsg}`);
+
+      const errorMsg = isPassthrough && error instanceof Error
+        ? error.message
+        : 'An internal error occurred. Please check server logs.';
+
       return JSON.stringify({
         success: false,
         error: errorMsg,
@@ -317,7 +318,7 @@ export class JulesTools {
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       if (!this.rateLimiter.isAllowed()) {
-        throw new Error('Rate limit exceeded. Please wait before creating more tasks.');
+        throw new RateLimitError('Rate limit exceeded. Please wait before creating more tasks.');
       }
 
       // SECURITY: Validate repository allowlist
@@ -364,7 +365,7 @@ export class JulesTools {
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       if (!this.rateLimiter.isAllowed()) {
-        throw new Error('Rate limit exceeded. Please wait before creating more tasks.');
+        throw new RateLimitError('Rate limit exceeded. Please wait before creating more tasks.');
       }
 
       const session = await this.client.createSession({
@@ -658,8 +659,10 @@ export class JulesTools {
     args: z.infer<typeof DeleteSessionSchema>
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
-      const session = await this.client.getSession(args.session_id);
-      await this.client.deleteSession(args.session_id);
+      const [session] = await Promise.all([
+        this.client.getSession(args.session_id),
+        this.client.deleteSession(args.session_id),
+      ]);
       const activeStates: SessionState[] = [
         'QUEUED',
         'PLANNING',

@@ -12,14 +12,14 @@ interface PromptTemplate {
   /** A description of what the prompt template does. */
   description: string;
   /** A list of arguments required by the template. */
-  arguments: Array<{
+  arguments: {
     /** The name of the argument. */
     name: string;
     /** A description of the argument. */
     description: string;
     /** Whether the argument is required. */
     required: boolean;
-  }>;
+  }[];
   /** A function that takes a map of arguments and returns the rendered prompt string. */
   template: (args: Record<string, string>) => string;
 }

@@ -77,6 +77,20 @@ describe('RepositoryValidator', () => {
         RepositoryValidator.validateRepository('sources/github/owner/repo2');
       }).toThrow(/Repository "owner\/repo2" is not in the allowed list/);
     });
+
+    it('should not reveal allowed list contents in error message', () => {
+      process.env.JULES_ALLOWED_REPOS = 'secret-owner/private-repo,another-secret/repo';
+      RepositoryValidator.initialize();
+      try {
+        expect(() =>
+          RepositoryValidator.validateRepository('sources/github/attacker/probe')
+        ).toThrow(
+          expect.not.stringContaining('secret-owner')
+        );
+      } finally {
+        delete process.env.JULES_ALLOWED_REPOS;
+      }
+    });
   });
 });
 

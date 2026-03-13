@@ -9,7 +9,6 @@ import type {
   Session,
   CreateSessionRequest,
   ListSessionsResponse,
-  Activity,
   ListActivitiesResponse,
   SendMessageRequest,
 } from '../types/jules-api.js';
@@ -188,29 +187,73 @@ export class JulesClient {
       ...options.headers,
     };
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-    try {
-      const response = await fetch(url, { ...options, headers, signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (!response.ok) {
-        const errorBody = await response.text();
+    let attempt = 0;
+    let lastError: unknown;
+
+    while (attempt <= this.maxRetries) {
+      if (attempt > 0) {
+        const delay = Math.pow(2, attempt - 1) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        const response = await fetch(url, { ...options, headers, signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+          const rawErrorBody = await response.text();
+          // SECURE: Truncate error body to prevent log flooding or PII leakage
+          const errorBody =
+            rawErrorBody.length > 500
+              ? rawErrorBody.substring(0, 500) + '... [truncated]'
+              : rawErrorBody;
+
+          // Retry on transient 5xx
+          if (response.status >= 500 && attempt < this.maxRetries) {
+            attempt++;
+            lastError = new JulesAPIError(
+              `Jules API error: ${response.statusText}`,
+              response.status,
+              errorBody
+            );
+            continue;
+          }
+          throw new JulesAPIError(
+            `Jules API error: ${response.statusText}`,
+            response.status,
+            errorBody
+          );
+        }
+        // Body may be empty (204 No Content) — return {} rather than trying to parse JSON
+        const text = await response.text();
+        return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        // Rethrow 4xx JulesAPIErrors immediately — do not retry client errors
+        if (error instanceof JulesAPIError) {
+          throw error;
+        }
+
+        const isAbort = error instanceof Error && error.name === 'AbortError';
+        if ((isAbort || error instanceof Error) && attempt < this.maxRetries) {
+          attempt++;
+          lastError = error;
+          continue;
+        }
         throw new JulesAPIError(
-          `Jules API error: ${response.statusText}`,
-          response.status,
-          errorBody
+          `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
       }
-      // Body may be empty (204 No Content) — return {} rather than trying to parse JSON
-      const text = await response.text();
-      return text ? (JSON.parse(text) as Record<string, unknown>) : {};
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof JulesAPIError) throw error;
-      throw new JulesAPIError(
-        `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
     }
+
+    // Exhausted retries
+    throw new JulesAPIError(
+      `Network error after ${this.maxRetries + 1} attempts: ${
+        lastError instanceof Error ? lastError.message : 'Unknown error'
+      }`
+    );
   }
 
   /**
@@ -342,7 +385,7 @@ export class JulesClient {
     return this.request<ListActivitiesResponse>(
       `/sessions/${sessionId}/activities${this.buildQuery({
         pageSize,
-        filter: `createTime>"${since}"`,
+        filter: `createTime>"${since.replace(/"/g, '')}"`,
       })}`
     );
   }

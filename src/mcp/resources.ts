@@ -40,11 +40,11 @@ export class JulesResources {
    * @param session - Session payload from the Jules API.
    * @returns Pull request metadata from the session outputs.
    */
-  private getPullRequests(session: Session): Array<{
+  private getPullRequests(session: Session): {
     url: string;
     title?: string;
     description?: string;
-  }> {
+  }[] {
     return (session.outputs || [])
       .flatMap((output) => (output.pullRequest ? [output.pullRequest] : []));
   }
