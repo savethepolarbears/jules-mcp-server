@@ -69,7 +69,6 @@ describe('JulesResources', () => {
     expect(result.count).toBe(0);
     expect(result.schedules).toEqual([]);
   });
-
   it('getSources returns formatted sources', async () => {
     (clientMock.listSources as ReturnType<typeof vi.fn>).mockResolvedValue({
       sources: [
