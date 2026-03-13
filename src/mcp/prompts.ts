@@ -6,7 +6,7 @@
 /**
  * Interface for a prompt template.
  */
-export interface PromptTemplate {
+interface PromptTemplate {
   /** The name of the prompt template. */
   name: string;
   /** A description of what the prompt template does. */
@@ -194,6 +194,149 @@ Use create_coding_task with:
 - auto_create_pr: true
 
 For recurring updates, use schedule_recurring_task with cron "0 9 * * 1" (Monday 9 AM). Keep cron intervals to at least 1 hour to respect quota limits.`,
+  },
+
+  {
+    name: 'monitor_and_review',
+    description:
+      'Create a coding task, wait for Jules to finish or pause, then review the full session output',
+    arguments: [
+      {
+        name: 'repository',
+        description: 'Repository name (format: owner/repo)',
+        required: true,
+      },
+      {
+        name: 'task_description',
+        description: 'The task Jules should implement',
+        required: true,
+      },
+    ],
+    template: (args) => `Create a Jules coding task for repository ${args.repository} with this task:
+
+${args.task_description}
+
+Workflow:
+1. Call create_coding_task with source set to sources/github/${args.repository}, require_plan_approval=true, and auto_create_pr=true.
+2. Call wait_for_session for the returned session ID. Use the default target states unless you need to stop at AWAITING_PLAN_APPROVAL or AWAITING_USER_FEEDBACK.
+3. Read jules://sessions/{id}/full after the wait completes.
+4. Summarize the current state, next steps, activities, and any PR URL or output artifacts.`,
+  },
+
+  {
+    name: 'create_repoless_script',
+    description:
+      'Create a repoless Jules task for one-off script or prototype generation',
+    arguments: [
+      {
+        name: 'task_description',
+        description: 'Description of the script or artifact to create',
+        required: true,
+      },
+      {
+        name: 'runtime',
+        description: 'Target runtime (node, python, rust, or bun)',
+        required: true,
+      },
+    ],
+    template: (args) => `Create a repoless Jules task to produce a ${args.runtime} solution for this request:
+
+${args.task_description}
+
+Use create_repoless_task with a prompt that:
+1. Specifies the target runtime as ${args.runtime}
+2. Requests runnable, production-quality code
+3. Includes validation steps and usage instructions
+4. Avoids repository-specific assumptions unless explicitly provided`,
+  },
+
+  {
+    name: 'implement_feature',
+    description:
+      'Detailed feature implementation template for a repository-backed Jules task',
+    arguments: [
+      {
+        name: 'repository',
+        description: 'Repository name (format: owner/repo)',
+        required: true,
+      },
+      {
+        name: 'feature_name',
+        description: 'Short feature name',
+        required: true,
+      },
+      {
+        name: 'description',
+        description: 'Detailed feature description',
+        required: true,
+      },
+      {
+        name: 'acceptance_criteria',
+        description: 'Acceptance criteria for the feature',
+        required: true,
+      },
+      {
+        name: 'affected_files',
+        description: 'Optional comma-separated list of likely affected files',
+        required: false,
+      },
+    ],
+    template: (args) => `Create a Jules coding task for repository ${args.repository} to implement the feature "${args.feature_name}".
+
+Feature description:
+${args.description}
+
+Acceptance criteria:
+${args.acceptance_criteria}
+
+${args.affected_files ? `Likely affected files:\n${args.affected_files.split(',').map((file) => `- ${file.trim()}`).join('\n')}\n` : ''}Implementation requirements:
+1. Modify only the files required for this feature.
+2. Preserve existing coding patterns and conventions.
+3. Add or update tests needed to validate the feature.
+4. Document any assumptions or follow-up work in the final summary.
+
+Use create_coding_task with:
+- Source: sources/github/${args.repository}
+- require_plan_approval: true
+- auto_create_pr: true`,
+  },
+
+  {
+    name: 'review_and_fix_pr',
+    description:
+      'Address review feedback for a pull request in a repository',
+    arguments: [
+      {
+        name: 'repository',
+        description: 'Repository name (format: owner/repo)',
+        required: true,
+      },
+      {
+        name: 'pr_number',
+        description: 'Pull request number',
+        required: true,
+      },
+      {
+        name: 'feedback',
+        description: 'Review feedback to address',
+        required: true,
+      },
+    ],
+    template: (args) => `Create a Jules coding task for repository ${args.repository} to address feedback on pull request #${args.pr_number}.
+
+Review feedback:
+${args.feedback}
+
+Task requirements:
+1. Review the PR context and feedback carefully.
+2. Implement the requested fixes without regressing existing behavior.
+3. Update tests if needed to cover the feedback.
+4. Summarize how each feedback item was addressed.
+
+Use create_coding_task with:
+- Source: sources/github/${args.repository}
+- require_plan_approval: true
+- auto_create_pr: true`,
   },
 ];
 

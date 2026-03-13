@@ -35,7 +35,7 @@ export interface ListSourcesResponse {
 /**
  * Context for a GitHub repository.
  */
-export interface GitHubRepoContext {
+interface GitHubRepoContext {
   /** Branch to base changes on */
   startingBranch: string;
 }
@@ -75,7 +75,9 @@ export type SessionState =
   | 'QUEUED'
   | 'PLANNING'
   | 'AWAITING_PLAN_APPROVAL'
+  | 'AWAITING_USER_FEEDBACK'
   | 'IN_PROGRESS'
+  | 'PAUSED'
   | 'COMPLETED'
   | 'FAILED'
   | 'CANCELED';
@@ -90,8 +92,10 @@ export interface Session {
   id: string;
   /** Optional human-readable title */
   title?: string;
+  /** Optional monitor URL returned by the Jules API */
+  url?: string;
   /** Source context for the session */
-  sourceContext: SourceContext;
+  sourceContext?: SourceContext;
   /** Natural language task prompt */
   prompt: string;
   /** Current session state */
@@ -104,6 +108,18 @@ export interface Session {
   createTime?: string;
   /** Timestamp when last updated */
   updateTime?: string;
+  /** Session outputs such as generated pull requests */
+  outputs?: Array<{
+    /** Pull request created by the session, if available */
+    pullRequest?: {
+      /** Pull request URL */
+      url: string;
+      /** Optional pull request title */
+      title?: string;
+      /** Optional pull request description */
+      description?: string;
+    };
+  }>;
 }
 
 /**
@@ -113,7 +129,7 @@ export interface CreateSessionRequest {
   /** Natural language task prompt */
   prompt: string;
   /** Source context for the session */
-  sourceContext: SourceContext;
+  sourceContext?: SourceContext;
   /** Optional human-readable title */
   title?: string;
   /** Automation configuration */
@@ -145,12 +161,16 @@ export type ActivityType =
   | 'PROGRESS_UPDATED'
   | 'SESSION_COMPLETED'
   | 'MESSAGE_SENT'
+  | 'AGENT_MESSAGED'
+  | 'PLAN_APPROVED'
   | 'ACTIVITY_TYPE_UNSPECIFIED';
 
 /**
  * Represents a set of changes in a plan.
  */
 export interface ChangeSet {
+  /** Unified patch for the full change set */
+  patch?: string;
   /** Array of file changes */
   changes?: Array<{
     /** The path of the file changed. */
@@ -194,12 +214,30 @@ export interface Activity {
     message?: string;
     /** The URL of the created pull request, if any. */
     pullRequestUrl?: string;
+    /** The final set of changes for the session, if available. */
+    changeSet?: ChangeSet;
   };
   messageSent?: {
     /** The message content. */
     prompt: string;
     /** The sender of the message. */
     sender: 'USER' | 'AGENT';
+  };
+  planApproved?: {
+    /** When the plan was approved. */
+    approvedAt: string;
+  };
+  agentMessaged?: {
+    /** Agent-authored message requiring user attention. */
+    message: string;
+  };
+  media?: {
+    /** Optional media URL. */
+    url?: string;
+    /** Media MIME type. */
+    mimeType?: string;
+    /** Optional human-readable description. */
+    description?: string;
   };
 }
 
@@ -219,11 +257,4 @@ export interface ListActivitiesResponse {
 export interface SendMessageRequest {
   /** The message content to send. */
   prompt: string;
-}
-
-/**
- * Request object for approving a plan.
- */
-export interface ApprovePlanRequest {
-  // Empty body per API spec
 }

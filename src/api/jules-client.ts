@@ -17,7 +17,7 @@ import type {
 /**
  * Custom error class for Jules API interactions.
  */
-export class JulesAPIError extends Error {
+class JulesAPIError extends Error {
   /**
    * Creates an instance of JulesAPIError.
    * @param message - The error message.
@@ -58,6 +58,24 @@ export class JulesClient {
     }
     this.timeoutMs = Number(process.env.JULES_API_TIMEOUT_MS || 15000);
     this.maxRetries = Number(process.env.JULES_API_MAX_RETRIES || 2);
+  }
+
+  /**
+   * Builds a URL query string while omitting undefined values.
+   * @param params - Query parameters to encode.
+   * @returns Encoded query string, including the leading `?` when needed.
+   */
+  private buildQuery(params: Record<string, string | number | undefined>): string {
+    const searchParams = new URLSearchParams();
+
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined) {
+        searchParams.set(key, String(value));
+      }
+    }
+
+    const query = searchParams.toString();
+    return query ? `?${query}` : '';
   }
 
   /**
@@ -145,9 +163,12 @@ export class JulesClient {
    * @param pageSize - The maximum number of sources to return (default: 100).
    * @returns A promise that resolves with the list of sources.
    */
-  async listSources(pageSize = 100): Promise<ListSourcesResponse> {
+  async listSources(
+    pageSize = 100,
+    pageToken?: string
+  ): Promise<ListSourcesResponse> {
     return this.request<ListSourcesResponse>(
-      `/sources?pageSize=${pageSize}`
+      `/sources${this.buildQuery({ pageSize, pageToken })}`
     );
   }
 
@@ -180,9 +201,12 @@ export class JulesClient {
    * @param pageSize - The maximum number of sessions to return (default: 20).
    * @returns A promise that resolves with the list of sessions.
    */
-  async listSessions(pageSize = 20): Promise<ListSessionsResponse> {
+  async listSessions(
+    pageSize = 20,
+    pageToken?: string
+  ): Promise<ListSessionsResponse> {
     return this.request<ListSessionsResponse>(
-      `/sessions?pageSize=${pageSize}`
+      `/sessions${this.buildQuery({ pageSize, pageToken })}`
     );
   }
 
@@ -235,10 +259,59 @@ export class JulesClient {
    */
   async listActivities(
     sessionId: string,
+    pageSize = 50,
+    pageToken?: string
+  ): Promise<ListActivitiesResponse> {
+    return this.request<ListActivitiesResponse>(
+      `/sessions/${sessionId}/activities${this.buildQuery({
+        pageSize,
+        pageToken,
+      })}`
+    );
+  }
+
+  /**
+   * List activities for a session created after a given timestamp.
+   * GET /v1alpha/sessions/{id}/activities?filter=createTime>"{since}"
+   * @param sessionId - The ID of the session to list activities for.
+   * @param since - ISO timestamp boundary.
+   * @param pageSize - The maximum number of activities to return.
+   * @returns A promise that resolves with the filtered activities.
+   */
+  async listActivitiesSince(
+    sessionId: string,
+    since: string,
     pageSize = 50
   ): Promise<ListActivitiesResponse> {
     return this.request<ListActivitiesResponse>(
-      `/sessions/${sessionId}/activities?pageSize=${pageSize}`
+      `/sessions/${sessionId}/activities${this.buildQuery({
+        pageSize,
+        filter: `createTime>"${since}"`,
+      })}`
     );
+  }
+
+  /**
+   * Delete or cancel a session.
+   * DELETE /v1alpha/sessions/{id}
+   * @param sessionId - The ID of the session to delete.
+   * @returns A promise that resolves with the empty response.
+   */
+  async deleteSession(sessionId: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>(`/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Reject the currently proposed plan for a session.
+   * DELETE /v1alpha/sessions/{id}
+   * @param sessionId - The ID of the session whose plan should be rejected.
+   * @returns A promise that resolves with the empty response.
+   */
+  async rejectPlan(sessionId: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>(`/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
   }
 }

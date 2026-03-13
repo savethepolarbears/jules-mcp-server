@@ -24,10 +24,15 @@ import { JulesResources } from './mcp/resources.js';
 import {
   JulesTools,
   CreateTaskSchema,
+  CreateRepolessTaskSchema,
   ManageSessionSchema,
   GetSessionStatusSchema,
+  WaitForSessionSchema,
+  GetActivitiesSinceSchema,
   ScheduleTaskSchema,
   DeleteScheduleSchema,
+  DeleteSessionSchema,
+  GetSourceDetailsSchema,
 } from './mcp/tools.js';
 import { JulesPromptManager, JULES_PROMPTS } from './mcp/prompts.js';
 import { RepositoryValidator } from './utils/security.js';
@@ -122,6 +127,24 @@ class JulesMCPServer {
             mimeType: 'application/json',
           },
           {
+            uri: 'jules://sessions/{id}/activities',
+            name: 'Session Activities',
+            description: 'Raw activity log for a specific session',
+            mimeType: 'application/json',
+          },
+          {
+            uri: 'jules://sessions/{id}/full',
+            name: 'Session Details',
+            description: 'Full session details including activities and outputs',
+            mimeType: 'application/json',
+          },
+          {
+            uri: 'jules://sessions/{id}/diff',
+            name: 'Session Diff',
+            description: 'Latest available change set for a specific session',
+            mimeType: 'application/json',
+          },
+          {
             uri: 'jules://schedules',
             name: 'Scheduled Tasks',
             description: 'Locally-managed recurring Jules tasks',
@@ -153,6 +176,12 @@ class JulesMCPServer {
             content = await this.resources.getSchedules();
           } else if (uri === 'jules://schedules/history') {
             content = await this.resources.getScheduleHistory();
+          } else if (uri.startsWith('jules://sessions/') && uri.endsWith('/activities')) {
+            const sessionId = uri.replace('jules://sessions/', '').replace('/activities', '');
+            content = await this.resources.getSessionActivities(sessionId);
+          } else if (uri.startsWith('jules://sessions/') && uri.endsWith('/diff')) {
+            const sessionId = uri.replace('jules://sessions/', '').replace('/diff', '');
+            content = await this.resources.getSessionDiff(sessionId);
           } else if (uri.startsWith('jules://sessions/') && uri.endsWith('/full')) {
             // Extract session ID from URI
             const sessionId = uri.replace('jules://sessions/', '').replace('/full', '');
@@ -223,6 +252,25 @@ class JulesMCPServer {
           },
         },
         {
+          name: 'create_repoless_task',
+          description:
+            'Creates a new Jules session without repository context for scripts, prototypes, or research tasks.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              prompt: {
+                type: 'string',
+                description: 'Natural language instruction for the repoless task',
+              },
+              title: {
+                type: 'string',
+                description: 'Optional session title',
+              },
+            },
+            required: ['prompt'],
+          },
+        },
+        {
           name: 'manage_session',
           description:
             'Manage an active Jules session: approve plans or send feedback',
@@ -232,7 +280,7 @@ class JulesMCPServer {
               session_id: { type: 'string', description: 'Session ID' },
               action: {
                 type: 'string',
-                enum: ['approve_plan', 'send_message'],
+                enum: ['approve_plan', 'send_message', 'reject_plan'],
                 description: 'Action to perform',
               },
               message: {
@@ -253,6 +301,63 @@ class JulesMCPServer {
               session_id: { type: 'string', description: 'Session ID' },
             },
             required: ['session_id'],
+          },
+        },
+        {
+          name: 'wait_for_session',
+          description:
+            'Poll a Jules session until it reaches a target state or the timeout expires',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              session_id: { type: 'string', description: 'Session ID' },
+              timeout_seconds: {
+                type: 'number',
+                description: 'Maximum time to wait in seconds',
+                default: 300,
+              },
+              poll_interval_seconds: {
+                type: 'number',
+                description: 'Polling interval in seconds',
+                default: 10,
+              },
+              target_states: {
+                type: 'array',
+                description: 'States that stop the polling loop',
+                items: {
+                  type: 'string',
+                  enum: [
+                    'COMPLETED',
+                    'FAILED',
+                    'CANCELED',
+                    'AWAITING_PLAN_APPROVAL',
+                    'AWAITING_USER_FEEDBACK',
+                  ],
+                },
+              },
+            },
+            required: ['session_id'],
+          },
+        },
+        {
+          name: 'get_activities_since',
+          description:
+            'Get session activities newer than a provided ISO timestamp',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              session_id: { type: 'string', description: 'Session ID' },
+              since: {
+                type: 'string',
+                description: 'ISO 8601 timestamp lower bound',
+              },
+              page_size: {
+                type: 'number',
+                description: 'Maximum number of activities to return',
+                default: 50,
+              },
+            },
+            required: ['session_id', 'since'],
           },
         },
         {
@@ -303,6 +408,31 @@ class JulesMCPServer {
             required: ['task_name'],
           },
         },
+        {
+          name: 'delete_session',
+          description: 'Delete or cancel an active Jules session',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              session_id: { type: 'string', description: 'Session ID' },
+            },
+            required: ['session_id'],
+          },
+        },
+        {
+          name: 'get_source_details',
+          description: 'Get detailed information about a source repository',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              source_name: {
+                type: 'string',
+                description: 'Source resource name (sources/github/owner/repo)',
+              },
+            },
+            required: ['source_name'],
+          },
+        },
       ],
     }));
 
@@ -319,6 +449,12 @@ class JulesMCPServer {
             break;
           }
 
+          case 'create_repoless_task': {
+            const validated = CreateRepolessTaskSchema.parse(args);
+            result = await this.tools.createRepolessTask(validated);
+            break;
+          }
+
           case 'manage_session': {
             const validated = ManageSessionSchema.parse(args);
             result = await this.tools.manageSession(validated);
@@ -328,6 +464,18 @@ class JulesMCPServer {
           case 'get_session_status': {
             const validated = GetSessionStatusSchema.parse(args);
             result = await this.tools.getSessionStatus(validated);
+            break;
+          }
+
+          case 'wait_for_session': {
+            const validated = WaitForSessionSchema.parse(args);
+            result = await this.tools.waitForSession(validated);
+            break;
+          }
+
+          case 'get_activities_since': {
+            const validated = GetActivitiesSinceSchema.parse(args);
+            result = await this.tools.getActivitiesSince(validated);
             break;
           }
 
@@ -345,6 +493,18 @@ class JulesMCPServer {
           case 'delete_schedule': {
             const validated = DeleteScheduleSchema.parse(args);
             result = await this.tools.deleteSchedule(validated);
+            break;
+          }
+
+          case 'delete_session': {
+            const validated = DeleteSessionSchema.parse(args);
+            result = await this.tools.deleteSession(validated);
+            break;
+          }
+
+          case 'get_source_details': {
+            const validated = GetSourceDetailsSchema.parse(args);
+            result = await this.tools.getSourceDetails(validated);
             break;
           }
 
