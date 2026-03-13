@@ -108,7 +108,6 @@ export interface Session {
   createTime?: string;
   /** Timestamp when last updated */
   updateTime?: string;
-  /** Session outputs such as generated pull requests */
   outputs?: {
     /** Pull request created by the session, if available */
     pullRequest?: {

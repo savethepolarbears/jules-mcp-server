@@ -16,7 +16,7 @@ import type {
 /**
  * Custom error class for Jules API interactions.
  */
-export class JulesAPIError extends Error {
+class JulesAPIError extends Error {
   /**
    * Creates an instance of JulesAPIError.
    * @param message - The error message.

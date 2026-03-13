@@ -293,7 +293,6 @@ export class JulesTools {
       const errorMsg = isPassthrough && error instanceof Error
         ? error.message
         : 'An internal error occurred. Please check server logs.';
-
       return JSON.stringify({
         success: false,
         error: errorMsg,
