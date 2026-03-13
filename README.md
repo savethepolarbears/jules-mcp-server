@@ -55,13 +55,14 @@ npm install
 # 3. Configure environment
 # Copy example env and fill in your JULES_API_KEY
 cp .env.example .env
-
 # 4. Verify the setup
 npm run lint
 npm run typecheck
 npm run test
 
 # 5. Build the project and run a smoke test to verify connectivity
+npm run build
+npm run mcp:smoke
 npm run mcp:smoke
 ```
 
