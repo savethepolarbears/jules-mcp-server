@@ -66,8 +66,17 @@ describe('JulesPromptManager', () => {
       expect(() => manager.renderPrompt('unknown', {})).toThrow('Prompt not found: unknown');
     });
 
-    it('throws when required argument is missing', () => {
-      expect(() => manager.renderPrompt('refactor_module', {})).toThrow(/Missing required argument/);
+    it('uses placeholders when required arguments are missing', () => {
+      const result = manager.renderPrompt('refactor_module', {});
+      expect(result).toContain('<repository>');
+      expect(result).toContain('<module_path>');
+      expect(result).toContain('<goal>');
+    });
+
+    it('renders all templates without error even with no args', () => {
+      for (const prompt of JULES_PROMPTS) {
+        expect(() => manager.renderPrompt(prompt.name, {})).not.toThrow();
+      }
     });
 
     it('renders all templates without error when args provided', () => {

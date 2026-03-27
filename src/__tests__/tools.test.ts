@@ -125,7 +125,7 @@ describe('JulesTools', () => {
 
       const parsed: { success: boolean; error: string } = JSON.parse(result);
       expect(parsed.success).toBe(false);
-      expect(parsed.error).toContain('at least 10 character(s)');
+      expect(parsed.error).toContain('>=10 characters');
     });
 
     it('Arbitrary Error returns generic message', async () => {
