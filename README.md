@@ -22,6 +22,7 @@ This MCP server bridges the Google Jules coding agent with AI assistants, allowi
 - **Monitor progress** - Track session states and review generated plans
 - **Approve plans** - Human-in-the-loop control before code changes
 - **Manage workflows** - Send feedback and iterate on Jules's work
+- **Activepieces Integration** - Use the included Jules piece (`pieces/jules`) to automate coding tasks in your Activepieces workflows
 
 ### Architecture: The "Thick Server" Pattern
 
@@ -210,7 +211,7 @@ The assistant will:
 
 ## Migration Guide
 
-The server has migrated from plain JSON storage (`schedules.json`) to encrypted storage (`schedules.enc`). 
+The server has migrated from plain JSON storage (`schedules.json`) to encrypted storage (`schedules.enc`).
 
 - **Auto-Migration**: Upon startup, if `schedules.json` is detected, the server automatically encrypts its contents and saves them to `schedules.enc`, then deletes the unencrypted file.
 - **Backwards Compatibility**: No manual action is required if you are upgrading from a version that used `schedules.json`.
@@ -224,6 +225,7 @@ Detailed documentation has been moved to the `docs/` folder:
 - [Configuration](docs/CONFIGURATION.md) - Environment variables and setup instructions.
 - [Examples](docs/EXAMPLES.md) - Example workflows and usage patterns.
 - [Quickstart](docs/QUICKSTART.md) - A fast guide to getting up and running.
+- [Activepieces Integration](pieces/jules/README.md) - Documentation for the custom Google Jules Activepieces integration.
 
 ## Security Considerations
 

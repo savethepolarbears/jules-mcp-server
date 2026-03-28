@@ -5,6 +5,20 @@ All notable changes to the Jules MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-03-27
+
+### Added
+
+- **Activepieces Integration**: Added a custom Google Jules piece (`pieces/jules`) to automate coding tasks in Activepieces workflows. Includes tools to create and manage sessions.
+
+### Changed
+
+- **Dependencies Upgrade**:
+  - Upgraded `@modelcontextprotocol/sdk` to `v1.28.0`
+  - Upgraded `vitest` to `v4` to address brace-expansion vulnerabilities
+  - Upgraded `zod` to `v4` and `knip` to `v6`
+  - Upgraded `typescript` to `v6`
+
 ## [1.0.0] - 2025-01-15
 
 ### Added

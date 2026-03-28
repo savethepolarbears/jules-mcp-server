@@ -53,11 +53,13 @@ export JULES_ENCRYPTION_KEY="your-32-byte-hex-key"
 ```
 
 **Generation:**
+
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 **Behavior:**
+
 - If **not set**: `JULES_API_KEY` is used as the default encryption key.
 - **Security Recommendation:** Use a dedicated, random key for schedule encryption to ensure security if you rotate your `JULES_API_KEY`.
 

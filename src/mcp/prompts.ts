@@ -374,13 +374,15 @@ export class JulesPromptManager {
       throw new Error(`Prompt not found: ${name}`);
     }
 
-    // Validate required arguments
+    // Fill in placeholders for missing required arguments so MCP clients
+    // (e.g. Antigravity) can preview prompts without providing all args.
+    const resolvedArgs: Record<string, string> = { ...args };
     for (const arg of prompt.arguments) {
-      if (arg.required && !args[arg.name]) {
-        throw new Error(`Missing required argument: ${arg.name}`);
+      if (!resolvedArgs[arg.name]) {
+        resolvedArgs[arg.name] = `<${arg.name}>`;
       }
     }
 
-    return prompt.template(args);
+    return prompt.template(resolvedArgs);
   }
 }
