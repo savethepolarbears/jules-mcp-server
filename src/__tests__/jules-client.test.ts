@@ -17,6 +17,11 @@ describe('JulesClient Resiliency', () => {
     vi.restoreAllMocks();
   });
 
+  it('constructor throws if no API key', () => {
+    vi.stubEnv('JULES_API_KEY', '');
+    expect(() => new JulesClient()).toThrow(/JULES_API_KEY/);
+  });
+
   it('should retry on transient 5xx errors and eventually succeed', async () => {
     const mockFetch = global.fetch as ReturnType<typeof vi.fn>;
     mockFetch
@@ -82,3 +87,78 @@ describe('JulesClient Resiliency', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('JulesClient Methods', () => {
+  let client: JulesClient;
+
+  beforeEach(() => {
+    vi.stubEnv('JULES_API_KEY', 'test-key');
+    client = new JulesClient();
+    global.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  const mockSuccess = (data: unknown = {}) => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue(data),
+      text: vi.fn().mockResolvedValue(JSON.stringify(data))
+    });
+  };
+
+  it('getSource', async () => {
+    mockSuccess({ name: 'test' });
+    await expect(client.getSource('sources/test')).resolves.toEqual({ name: 'test' });
+  });
+
+  it('createSession', async () => {
+    mockSuccess({ id: '1' });
+    await expect(client.createSession({ prompt: 'test' })).resolves.toEqual({ id: '1' });
+  });
+
+  it('listSessions', async () => {
+    mockSuccess({ sessions: [] });
+    await expect(client.listSessions(10, 'token')).resolves.toEqual({ sessions: [] });
+  });
+
+  it('getSession', async () => {
+    mockSuccess({ id: '1' });
+    await expect(client.getSession('1')).resolves.toEqual({ id: '1' });
+  });
+
+  it('approvePlan', async () => {
+    mockSuccess({ id: '1', state: 'IN_PROGRESS' });
+    await expect(client.approvePlan('1')).resolves.toEqual({ id: '1', state: 'IN_PROGRESS' });
+  });
+
+  it('sendMessage', async () => {
+    mockSuccess({ id: '1' });
+    await expect(client.sendMessage('1', { prompt: 'hello' })).resolves.toEqual({ id: '1' });
+  });
+
+  it('listActivities', async () => {
+    mockSuccess({ activities: [] });
+    await expect(client.listActivities('1', 10, 'token')).resolves.toEqual({ activities: [] });
+  });
+
+  it('listActivitiesSince', async () => {
+    mockSuccess({ activities: [] });
+    await expect(client.listActivitiesSince('1', '2025-01-01', 10)).resolves.toEqual({ activities: [] });
+  });
+
+  it('deleteSession', async () => {
+    mockSuccess();
+    await expect(client.deleteSession('1')).resolves.toEqual({});
+  });
+
+  it('rejectPlan', async () => {
+    mockSuccess();
+    await expect(client.rejectPlan('1')).resolves.toEqual({});
+  });
+});
+
