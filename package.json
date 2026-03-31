@@ -49,9 +49,9 @@
     "@vitest/coverage-v8": "^4.1.2",
     "eslint": "^10.1.0",
     "globals": "^17.4.0",
-    "knip": "^6.0.6",
+    "knip": "^6.1.0",
     "tsx": "^4.19.2",
-    "typescript": "^6.0.2",
+    "typescript": "^5.7.2",
     "typescript-eslint": "^8.57.2",
     "vitest": "^4.1.2"
   },

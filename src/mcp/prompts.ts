@@ -378,7 +378,7 @@ export class JulesPromptManager {
     // (e.g. Antigravity) can preview prompts without providing all args.
     const resolvedArgs: Record<string, string> = { ...args };
     for (const arg of prompt.arguments) {
-      if (!resolvedArgs[arg.name]) {
+      if (arg.required && !resolvedArgs[arg.name]) {
         resolvedArgs[arg.name] = `<${arg.name}>`;
       }
     }

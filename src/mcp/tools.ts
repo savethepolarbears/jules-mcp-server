@@ -275,15 +275,10 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string representing the structured result or error.
    */
   private async executeWithErrorHandling<T>(
-    operation: () => Promise<T>,
-    successTransform?: (result: T) => Record<string, unknown>
+    operation: () => Promise<T>
   ): Promise<string> {
     try {
       const result = await operation();
-
-      if (successTransform) {
-        return JSON.stringify({ success: true, ...successTransform(result) });
-      }
 
       return JSON.stringify(result);
     } catch (error) {
