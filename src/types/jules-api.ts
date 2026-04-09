@@ -6,20 +6,36 @@
 /**
  * Represents a source repository for Jules.
  */
+export interface GitHubBranch {
+  /** Branch name as displayed by Jules. */
+  displayName: string;
+}
+
+/**
+ * GitHub repository metadata returned by Jules.
+ */
+export interface GitHubRepo {
+  /** The owner of the GitHub repository. */
+  owner: string;
+  /** The name of the GitHub repository. */
+  repo: string;
+  /** Optional repository URL when exposed by the API. */
+  htmlUrl?: string;
+  /** Whether the repository is private. */
+  isPrivate?: boolean;
+  /** The default branch for the repository. */
+  defaultBranch?: GitHubBranch | string;
+  /** Active branches that Jules can target. */
+  branches?: GitHubBranch[];
+}
+
 export interface Source {
   /** Resource name format: sources/github/{owner}/{repo} */
   name: string;
+  /** Unique source identifier. */
+  id?: string;
   /** GitHub repository details */
-  githubRepo?: {
-    /** The owner of the GitHub repository. */
-    owner: string;
-    /** The name of the GitHub repository. */
-    repo: string;
-    /** The HTML URL of the GitHub repository. */
-    htmlUrl: string;
-    /** The default branch of the GitHub repository. */
-    defaultBranch: string;
-  };
+  githubRepo?: GitHubRepo;
 }
 
 /**
@@ -48,6 +64,8 @@ export interface SourceContext {
   source: string;
   /** GitHub repository context details. */
   githubRepoContext?: GitHubRepoContext;
+  /** Whether repository environment variables are exposed in the session. */
+  environmentVariablesEnabled?: boolean;
 }
 
 /**
@@ -72,6 +90,7 @@ export type AutomationMode =
  */
 export type SessionState =
   | 'SESSION_STATE_UNSPECIFIED'
+  | 'STATE_UNSPECIFIED'
   | 'QUEUED'
   | 'PLANNING'
   | 'AWAITING_PLAN_APPROVAL'
@@ -160,15 +179,33 @@ export type ActivityType =
   | 'PLAN_GENERATED'
   | 'PROGRESS_UPDATED'
   | 'SESSION_COMPLETED'
+  | 'SESSION_FAILED'
   | 'MESSAGE_SENT'
+  | 'USER_MESSAGED'
   | 'AGENT_MESSAGED'
   | 'PLAN_APPROVED'
   | 'ACTIVITY_TYPE_UNSPECIFIED';
 
 /**
+ * Represents a Git patch produced by Jules.
+ */
+export interface GitPatch {
+  /** The commit the patch is based on. */
+  baseCommitId?: string;
+  /** Unified diff patch content. */
+  unidiffPatch?: string;
+  /** Suggested commit message for the patch. */
+  suggestedCommitMessage?: string;
+}
+
+/**
  * Represents a set of changes in a plan.
  */
 export interface ChangeSet {
+  /** Source repository the change set applies to. */
+  source?: string;
+  /** Git-native patch payload returned by current Jules API responses. */
+  gitPatch?: GitPatch;
   /** Unified patch for the full change set */
   patch?: string;
   /** Array of file changes */
@@ -185,31 +222,94 @@ export interface ChangeSet {
 }
 
 /**
+ * Single artifact emitted by a Jules activity.
+ */
+export interface Artifact {
+  /** Code changes emitted by the activity. */
+  changeSet?: ChangeSet;
+  /** Command output emitted by the activity. */
+  bashOutput?: {
+    /** Command that was executed. */
+    command?: string;
+    /** Combined stdout/stderr output. */
+    output?: string;
+    /** Exit code for the command. */
+    exitCode?: number;
+  };
+  /** Media file emitted by the activity. */
+  media?: {
+    /** Optional media URL. */
+    url?: string;
+    /** Media MIME type. */
+    mimeType?: string;
+    /** Optional human-readable description. */
+    description?: string;
+    /** Base64 payload when the API returns inline media. */
+    data?: string;
+  };
+}
+
+/**
+ * Structured plan emitted by Jules.
+ */
+export interface Plan {
+  /** Plan identifier. */
+  id?: string;
+  /** Ordered plan steps. */
+  steps?: {
+    /** Unique step identifier. */
+    id?: string;
+    /** Zero-based step index. */
+    index?: number;
+    /** Short step title. */
+    title: string;
+    /** Expanded step description. */
+    description?: string;
+  }[];
+  /** When the plan was created. */
+  createTime?: string;
+}
+
+/**
  * Represents an activity within a session.
  */
 export interface Activity {
   /** Resource name format: sessions/{session_id}/activities/{activity_id} */
   name: string;
+  /** Unique activity identifier. */
+  id?: string;
   /** Activity type */
-  type: ActivityType;
+  type?: ActivityType | (string & {});
+  /** Entity that created the activity. */
+  originator?: string;
+  /** Optional human-readable summary. */
+  description?: string;
   /** Timestamp when activity occurred */
   timestamp?: string;
+  /** Timestamp used by the live Jules API. */
+  createTime?: string;
+  /** Artifacts emitted by the activity. */
+  artifacts?: Artifact[];
   /** Activity-specific payload */
   planGenerated?: {
-    /** The generated plan description. */
-    plan: string;
+    /** The generated plan. */
+    plan: Plan | string;
     /** The set of changes proposed in the plan. */
     changeSet?: ChangeSet;
   };
   progressUpdated?: {
+    /** Short title emitted by the live Jules API. */
+    title?: string;
+    /** Longer description emitted by the live Jules API. */
+    description?: string;
     /** The progress message. */
-    message: string;
+    message?: string;
     /** The completion percentage. */
     percentage?: number;
   };
   sessionCompleted?: {
     /** Whether the session completed successfully. */
-    success: boolean;
+    success?: boolean;
     /** A message describing the completion. */
     message?: string;
     /** The URL of the created pull request, if any. */
@@ -217,19 +317,31 @@ export interface Activity {
     /** The final set of changes for the session, if available. */
     changeSet?: ChangeSet;
   };
+  sessionFailed?: {
+    /** A message describing why the session failed. */
+    reason?: string;
+  };
   messageSent?: {
     /** The message content. */
     prompt: string;
     /** The sender of the message. */
     sender: 'USER' | 'AGENT';
   };
+  userMessaged?: {
+    /** The message content emitted by the current Jules API. */
+    userMessage: string;
+  };
   planApproved?: {
     /** When the plan was approved. */
-    approvedAt: string;
+    approvedAt?: string;
+    /** Plan identifier emitted by the current Jules API. */
+    planId?: string;
   };
   agentMessaged?: {
     /** Agent-authored message requiring user attention. */
-    message: string;
+    message?: string;
+    /** Agent-authored message emitted by the current Jules API. */
+    agentMessage?: string;
   };
   media?: {
     /** Optional media URL. */
@@ -238,6 +350,8 @@ export interface Activity {
     mimeType?: string;
     /** Optional human-readable description. */
     description?: string;
+    /** Base64 payload when the API returns inline media. */
+    data?: string;
   };
 }
 

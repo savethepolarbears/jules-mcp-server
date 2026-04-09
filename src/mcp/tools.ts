@@ -5,12 +5,19 @@
 
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import type { JulesClient } from '../api/jules-client.js';
+import { JulesAPIError, type JulesClient } from '../api/jules-client.js';
 import type { ScheduleStorage } from '../storage/schedule-store.js';
 import { CronEngine } from '../scheduler/cron-engine.js';
 import type { ScheduledTask } from '../types/schedule.js';
-import type { Session, SessionState } from '../types/jules-api.js';
+import type { GitHubBranch, Session, SessionState } from '../types/jules-api.js';
 import { RepositoryValidator, smartTruncate, containsSecret, RateLimitError, SecurityError, RateLimiter } from '../utils/security.js';
+
+class ToolInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ToolInputError';
+  }
+}
 
 // Input validation schemas
 export const CreateTaskSchema = z.object({
@@ -254,6 +261,51 @@ export class JulesTools {
   }
 
   /**
+   * Normalizes Jules branch metadata into a plain branch name.
+   * @param branch - Branch metadata returned by Jules.
+   * @returns Human-readable branch name when available.
+   */
+  private getBranchName(branch?: GitHubBranch | string): string | undefined {
+    if (!branch) {
+      return undefined;
+    }
+
+    return typeof branch === 'string' ? branch : branch.displayName;
+  }
+
+  /**
+   * Verifies that the requested branch exists in Jules before task creation.
+   * This avoids creating sessions that will fail immediately because the base
+   * branch is unknown to the Jules-connected repository.
+   *
+   * @param sourceName - Jules source identifier.
+   * @param requestedBranch - Branch to validate.
+   */
+  private async validateSourceBranch(
+    sourceName: string,
+    requestedBranch: string
+  ): Promise<void> {
+    const source = await this.client.getSource(sourceName);
+    const branchNames = (source.githubRepo?.branches || [])
+      .map((branch) => this.getBranchName(branch))
+      .filter((branch): branch is string => Boolean(branch));
+
+    if (branchNames.length === 0 || branchNames.includes(requestedBranch)) {
+      return;
+    }
+
+    const defaultBranch =
+      this.getBranchName(source.githubRepo?.defaultBranch) || 'main';
+    const suggestedBranches = branchNames.slice(0, 10).join(', ');
+
+    throw new ToolInputError(
+      `Branch "${requestedBranch}" is not connected in Jules for ${sourceName}. ` +
+        `Use an existing branch such as "${defaultBranch}".` +
+        (suggestedBranches ? ` Available branches: ${suggestedBranches}` : '')
+    );
+  }
+
+  /**
    * Sleeps for the requested duration.
    * @param milliseconds - Delay duration in milliseconds.
    * @returns Promise resolving after the delay.
@@ -282,10 +334,15 @@ export class JulesTools {
 
       return JSON.stringify(result);
     } catch (error) {
+      const isJulesApiError =
+        error instanceof JulesAPIError ||
+        (error instanceof Error && error.name === 'JulesAPIError');
       const isPassthrough = 
         error instanceof z.ZodError ||
         error instanceof SecurityError ||
-        error instanceof RateLimitError;
+        error instanceof RateLimitError ||
+        isJulesApiError ||
+        error instanceof ToolInputError;
 
       const logMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error(`Tool execution error: ${logMsg}`);
@@ -318,6 +375,7 @@ export class JulesTools {
 
       // SECURITY: Validate repository allowlist
       RepositoryValidator.validateRepository(args.source);
+      await this.validateSourceBranch(args.source, args.branch);
 
       const session = await this.client.createSession({
         prompt: args.prompt,
@@ -390,7 +448,8 @@ export class JulesTools {
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       if (args.action === 'approve_plan') {
-        const session = await this.client.approvePlan(args.session_id);
+        await this.client.approvePlan(args.session_id);
+        const session = await this.client.getSession(args.session_id);
         return {
           message: 'Plan approved. Session is now executing.',
           newState: session.state,
@@ -407,12 +466,13 @@ export class JulesTools {
 
       if (args.action === 'send_message') {
         if (!args.message) {
-          throw new Error('Message is required for send_message action');
+          throw new ToolInputError('Message is required for send_message action');
         }
 
-        const session = await this.client.sendMessage(args.session_id, {
+        await this.client.sendMessage(args.session_id, {
           prompt: args.message,
         });
+        const session = await this.client.getSession(args.session_id);
 
         return {
           message: 'Feedback sent to session',
@@ -420,7 +480,7 @@ export class JulesTools {
         };
       }
 
-      throw new Error('Invalid action');
+      throw new ToolInputError(`Unsupported action: ${args.action}`);
     });
   }
 
@@ -532,7 +592,7 @@ export class JulesTools {
     return this.executeWithErrorHandling(async () => {
       // Validate cron expression
       if (!CronEngine.validateCronExpression(args.cron_expression)) {
-        throw new Error(
+        throw new ToolInputError(
           `Invalid cron expression: ${args.cron_expression}. Format: minute hour day month weekday`
         );
       }
@@ -540,13 +600,14 @@ export class JulesTools {
       // Check for name collision
       const existing = await this.storage.getTaskByName(args.task_name);
       if (existing) {
-        throw new Error(
+        throw new ToolInputError(
           `A schedule named "${args.task_name}" already exists. Use delete_schedule first or choose a different name.`
         );
       }
 
       // SECURITY: Validate repository allowlist
       RepositoryValidator.validateRepository(args.source);
+      await this.validateSourceBranch(args.source, args.branch);
 
       // Create scheduled task
       const task: ScheduledTask = {
@@ -691,7 +752,10 @@ export class JulesTools {
         repository: source.githubRepo
           ? `${source.githubRepo.owner}/${source.githubRepo.repo}`
           : 'Unknown',
-        defaultBranch: source.githubRepo?.defaultBranch || 'main',
+        defaultBranch: this.getBranchName(source.githubRepo?.defaultBranch) || 'main',
+        branches: (source.githubRepo?.branches || [])
+          .map((branch) => this.getBranchName(branch))
+          .filter((branch): branch is string => Boolean(branch)),
         url: source.githubRepo?.htmlUrl,
         metadata: source.githubRepo,
       };

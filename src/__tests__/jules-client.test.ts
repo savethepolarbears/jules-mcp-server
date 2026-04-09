@@ -189,6 +189,50 @@ describe('JulesClient Methods', () => {
     await expect(client.listActivitiesSince('1', '2025-01-01', 10)).resolves.toEqual({ activities: [] });
   });
 
+  it('listActivitiesSince filters client-side using createTime and paginates', async () => {
+    const mockFetch = global.fetch as ReturnType<typeof vi.fn>;
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          activities: [
+            { name: 'activities/old', createTime: '2024-12-31T23:59:59Z' },
+          ],
+          nextPageToken: 'page-2',
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          activities: [
+            { name: 'activities/new-1', createTime: '2025-01-01T00:00:01Z' },
+            { name: 'activities/new-2', createTime: '2025-01-01T00:00:02Z' },
+          ],
+          nextPageToken: 'page-3',
+        }),
+      });
+
+    const response = await client.listActivitiesSince('1', '2025-01-01T00:00:00Z', 2);
+
+    expect(response).toEqual({
+      activities: [
+        { name: 'activities/new-1', createTime: '2025-01-01T00:00:01Z' },
+        { name: 'activities/new-2', createTime: '2025-01-01T00:00:02Z' },
+      ],
+      nextPageToken: 'page-3',
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[1]?.[0]).toContain('pageToken=page-2');
+  });
+
+  it('listActivitiesSince rejects invalid timestamps', async () => {
+    await expect(client.listActivitiesSince('1', 'not-a-timestamp', 10)).rejects.toThrow(
+      'Invalid since timestamp: not-a-timestamp',
+    );
+  });
+
   it('deleteSession', async () => {
     mockSuccess();
     await expect(client.deleteSession('1')).resolves.toEqual({});
@@ -199,4 +243,3 @@ describe('JulesClient Methods', () => {
     await expect(client.rejectPlan('1')).resolves.toEqual({});
   });
 });
-

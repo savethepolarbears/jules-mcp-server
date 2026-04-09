@@ -70,6 +70,15 @@ describe("JulesTools", () => {
     vi.mocked(CronEngine.validateCronExpression).mockImplementation(
       (cron) => cron !== "- - - - -",
     );
+    vi.mocked(client.getSource).mockResolvedValue({
+      name: "sources/github/owner/repo",
+      githubRepo: {
+        owner: "owner",
+        repo: "repo",
+        defaultBranch: { displayName: "main" },
+        branches: [{ displayName: "main" }],
+      },
+    } as Awaited<ReturnType<JulesClient["getSource"]>>);
     tools = new JulesTools(client, storage, scheduler);
   });
 
@@ -153,6 +162,26 @@ describe("JulesTools", () => {
       expect(parsed.error).toBe(
         "An internal error occurred. Please check server logs.",
       );
+    });
+
+    it("JulesAPIError message passes through", async () => {
+      vi.mocked(client.createSession).mockRejectedValue(
+        Object.assign(new Error("Jules API error: Bad Request"), {
+          name: "JulesAPIError",
+        }),
+      );
+
+      const result = await tools.createCodingTask({
+        prompt: "test prompt long enough",
+        source: "sources/github/owner/repo",
+        branch: "main",
+        auto_create_pr: true,
+        require_plan_approval: false,
+      });
+
+      const parsed: { success: boolean; error: string } = JSON.parse(result);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toBe("Jules API error: Bad Request");
     });
 
     it("console.error is called with just the message string", async () => {
@@ -322,7 +351,8 @@ describe("JulesTools", () => {
 
   describe("manageSession", () => {
     it("approve_plan returns success", async () => {
-      vi.mocked(client.approvePlan).mockResolvedValue(
+      vi.mocked(client.approvePlan).mockResolvedValue({});
+      vi.mocked(client.getSession).mockResolvedValue(
         makeSession({ state: "IN_PROGRESS" }),
       );
 
@@ -336,7 +366,8 @@ describe("JulesTools", () => {
     });
 
     it("send_message with a message", async () => {
-      vi.mocked(client.sendMessage).mockResolvedValue({
+      vi.mocked(client.sendMessage).mockResolvedValue({});
+      vi.mocked(client.getSession).mockResolvedValue({
         id: "1",
         name: "1",
         prompt: "test",
@@ -364,9 +395,7 @@ describe("JulesTools", () => {
       });
       const parsed = JSON.parse(resultStr);
       expect(parsed.success).toBe(false);
-      expect(parsed.error).toBe(
-        "An internal error occurred. Please check server logs.",
-      );
+      expect(parsed.error).toBe("Message is required for send_message action");
     });
 
     it("throws on invalid action", async () => {
@@ -377,9 +406,7 @@ describe("JulesTools", () => {
       });
       const parsed = JSON.parse(resultStr);
       expect(parsed.success).toBe(false);
-      expect(parsed.error).toBe(
-        "An internal error occurred. Please check server logs.",
-      );
+      expect(parsed.error).toBe("Unsupported action: invalid_action");
     });
 
     it("reject_plan returns canceled state", async () => {
@@ -553,7 +580,7 @@ describe("JulesTools", () => {
       const parsed = JSON.parse(resultStr);
       expect(parsed.success).toBe(false);
       expect(parsed.error).toBe(
-        "An internal error occurred. Please check server logs.",
+        "Invalid cron expression: - - - - -. Format: minute hour day month weekday",
       );
     });
 
@@ -573,6 +600,7 @@ describe("JulesTools", () => {
 
       const parsed: { success: boolean; error: string } = JSON.parse(result);
       expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain("already exists");
     });
   });
 
@@ -650,7 +678,8 @@ describe("JulesTools", () => {
         githubRepo: {
           owner: "owner",
           repo: "repo",
-          defaultBranch: "main",
+          defaultBranch: { displayName: "main" },
+          branches: [{ displayName: "main" }, { displayName: "develop" }],
           htmlUrl: "https://github.com/owner/repo",
         },
       });
@@ -660,6 +689,7 @@ describe("JulesTools", () => {
       });
       const parsed = JSON.parse(result) as Record<string, unknown>;
       expect(parsed.repository).toBe("owner/repo");
+      expect(parsed.defaultBranch).toBe("main");
     });
   });
 
@@ -670,9 +700,9 @@ describe("JulesTools", () => {
       vi.mocked(client.listActivitiesSince).mockResolvedValue({
         activities: [
           {
-            type: "PLAN_GENERATED",
             name: "activities/1",
-            timestamp: "2026-01-01T00:00:00Z",
+            createTime: "2026-01-01T00:00:00Z",
+            planGenerated: { plan: "Fix the thing" },
           },
         ],
       });
@@ -683,6 +713,21 @@ describe("JulesTools", () => {
       });
       const parsed = JSON.parse(result) as { count: number };
       expect(parsed.count).toBe(1);
+    });
+
+    it("rejects unknown branches before creating a session", async () => {
+      const result = await tools.createCodingTask({
+        prompt: "implement feature X",
+        source: "sources/github/owner/repo",
+        branch: "feature/does-not-exist",
+        auto_create_pr: true,
+        require_plan_approval: false,
+      });
+
+      const parsed = JSON.parse(result) as { success: boolean; error: string };
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain("feature/does-not-exist");
+      expect(client.createSession).not.toHaveBeenCalled();
     });
   });
 });

@@ -64,6 +64,18 @@ describe('JulesResources', () => {
     expect(result.sessions[0].repository).toBe('repoless');
   });
 
+  it('getSessionsList degrades gracefully when upstream listing times out', async () => {
+    (clientMock.listSessions as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Network error: This operation was aborted')
+    );
+
+    const result = JSON.parse(await resources.getSessionsList());
+    expect(result.degraded).toBe(true);
+    expect(result.count).toBe(0);
+    expect(result.sessions).toEqual([]);
+    expect(result.error).toContain('aborted');
+  });
+
   it('getSchedules returns empty list when no tasks', async () => {
     const result = JSON.parse(await resources.getSchedules());
     expect(result.count).toBe(0);

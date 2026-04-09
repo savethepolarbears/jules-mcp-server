@@ -50,6 +50,81 @@ export class JulesResources {
   }
 
   /**
+   * Normalizes Jules branch metadata into a plain branch name.
+   * @param branch - Branch metadata returned by Jules.
+   * @returns Human-readable branch name when available.
+   */
+  private getBranchName(branch?: string | { displayName: string }): string | undefined {
+    if (!branch) {
+      return undefined;
+    }
+
+    return typeof branch === 'string' ? branch : branch.displayName;
+  }
+
+  /**
+   * Returns the timestamp for an activity, supporting both the legacy
+   * `timestamp` field and the current `createTime` field.
+   * @param activity - Activity to inspect.
+   * @returns Timestamp string when available.
+   */
+  private getActivityTimestamp(activity: Activity): string | undefined {
+    return activity.createTime || activity.timestamp;
+  }
+
+  /**
+   * Infers an activity type when the live API omits the legacy `type` field.
+   * @param activity - Activity to inspect.
+   * @returns Normalized activity type label.
+   */
+  private getActivityType(activity: Activity): string {
+    if (activity.type) {
+      return activity.type;
+    }
+
+    if (activity.planGenerated) return 'PLAN_GENERATED';
+    if (activity.planApproved) return 'PLAN_APPROVED';
+    if (activity.progressUpdated) return 'PROGRESS_UPDATED';
+    if (activity.sessionCompleted) return 'SESSION_COMPLETED';
+    if (activity.sessionFailed) return 'SESSION_FAILED';
+    if (activity.userMessaged || activity.messageSent) return 'USER_MESSAGED';
+    if (activity.agentMessaged) return 'AGENT_MESSAGED';
+
+    return 'ACTIVITY_TYPE_UNSPECIFIED';
+  }
+
+  /**
+   * Returns the latest change set attached to an activity.
+   * @param activity - Activity to inspect.
+   * @returns Change set when available.
+   */
+  private getActivityChangeSet(activity: Activity): ChangeSet | undefined {
+    return (
+      activity.sessionCompleted?.changeSet ||
+      activity.planGenerated?.changeSet ||
+      activity.artifacts?.find((artifact) => artifact.changeSet)?.changeSet
+    );
+  }
+
+  /**
+   * Counts file changes in a change set, falling back to parsing the unified diff.
+   * @param changeSet - Change set to inspect.
+   * @returns Number of changed files.
+   */
+  private getChangeSetFileCount(changeSet: ChangeSet): number {
+    if (changeSet.changes?.length) {
+      return changeSet.changes.length;
+    }
+
+    const patch = changeSet.gitPatch?.unidiffPatch || changeSet.patch;
+    if (!patch) {
+      return 0;
+    }
+
+    return (patch.match(/^diff --git /gm) || []).length;
+  }
+
+  /**
    * Finds the most recent change set attached to session activities.
    * @param activities - Activity list in chronological order.
    * @returns The latest change set and its source activity, if available.
@@ -61,14 +136,13 @@ export class JulesResources {
   } {
     for (let index = activities.length - 1; index >= 0; index -= 1) {
       const activity = activities[index];
-      const changeSet =
-        activity.sessionCompleted?.changeSet || activity.planGenerated?.changeSet;
+      const changeSet = this.getActivityChangeSet(activity);
 
       if (changeSet) {
         return {
           changeSet,
-          activityType: activity.type,
-          timestamp: activity.timestamp,
+          activityType: this.getActivityType(activity),
+          timestamp: this.getActivityTimestamp(activity),
         };
       }
     }
@@ -91,7 +165,10 @@ export class JulesResources {
       repository: source.githubRepo
         ? `${source.githubRepo.owner}/${source.githubRepo.repo}`
         : 'Unknown',
-      defaultBranch: source.githubRepo?.defaultBranch || 'main',
+      defaultBranch: this.getBranchName(source.githubRepo?.defaultBranch) || 'main',
+      branches: (source.githubRepo?.branches || [])
+        .map((branch) => this.getBranchName(branch))
+        .filter((branch): branch is string => Boolean(branch)),
       url: source.githubRepo?.htmlUrl,
     }));
 
@@ -114,26 +191,44 @@ export class JulesResources {
    * @returns {Promise<string>} A JSON string representing a summary of recent sessions.
    */
   async getSessionsList(): Promise<string> {
-    const response = await this.client.listSessions(50);
+    try {
+      const response = await this.client.listSessions(10);
 
-    const formatted = response.sessions.map((session) => ({
-      id: session.id,
-      title: session.title || 'Untitled Task',
-      state: session.state || 'UNKNOWN',
-      prompt: smartTruncate(session.prompt, 100),
-      repository: this.getRepositoryLabel(session),
-      created: session.createTime,
-    }));
+      const formatted = response.sessions.map((session) => ({
+        id: session.id,
+        title: session.title || 'Untitled Task',
+        state: session.state || 'UNKNOWN',
+        prompt: smartTruncate(session.prompt, 100),
+        repository: this.getRepositoryLabel(session),
+        created: session.createTime,
+      }));
 
-    return JSON.stringify(
-      {
-        description: 'Recent Jules sessions (tasks). Be mindful of API quotas when querying session history frequently.',
-        count: formatted.length,
-        sessions: formatted,
-      },
-      null,
-      2
-    );
+      return JSON.stringify(
+        {
+          description: 'Recent Jules sessions (tasks). Be mindful of API quotas when querying session history frequently.',
+          count: formatted.length,
+          sessions: formatted,
+        },
+        null,
+        2
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown upstream error';
+
+      return JSON.stringify(
+        {
+          description:
+            'Recent Jules sessions are temporarily unavailable because the upstream list endpoint timed out. Use get_session_status or jules://sessions/{id}/full for known session IDs.',
+          degraded: true,
+          count: 0,
+          sessions: [],
+          error: message,
+        },
+        null,
+        2
+      );
+    }
   }
 
   /**
@@ -174,19 +269,31 @@ export class JulesResources {
     // Format activities for readability
     const formattedActivities = activitiesResponse.activities.map(
       (activity) => {
+        const changeSet = this.getActivityChangeSet(activity);
         const base = {
-          type: activity.type,
-          timestamp: activity.timestamp,
+          type: this.getActivityType(activity),
+          timestamp: this.getActivityTimestamp(activity),
+          originator: activity.originator,
+          description: activity.description,
           media: activity.media,
         };
 
         // Add type-specific details
         if (activity.planGenerated) {
+          const plan = activity.planGenerated.plan;
           return {
             ...base,
-            plan: activity.planGenerated.plan,
-            changesPreview: activity.planGenerated.changeSet
-              ? `${activity.planGenerated.changeSet.changes?.length || 0} files`
+            plan,
+            planId:
+              typeof plan === 'string'
+                ? undefined
+                : plan.id,
+            stepCount:
+              typeof plan === 'string'
+                ? undefined
+                : plan.steps?.length || 0,
+            changesPreview: changeSet
+              ? `${this.getChangeSetFileCount(changeSet)} files`
               : 'No changes',
           };
         }
@@ -194,7 +301,12 @@ export class JulesResources {
         if (activity.progressUpdated) {
           return {
             ...base,
-            message: activity.progressUpdated.message,
+            message:
+              activity.progressUpdated.message ||
+              activity.progressUpdated.title ||
+              activity.progressUpdated.description,
+            title: activity.progressUpdated.title,
+            details: activity.progressUpdated.description,
             percentage: activity.progressUpdated.percentage,
           };
         }
@@ -209,6 +321,14 @@ export class JulesResources {
           };
         }
 
+        if (activity.sessionFailed) {
+          return {
+            ...base,
+            success: false,
+            message: activity.sessionFailed.reason,
+          };
+        }
+
         if (activity.messageSent) {
           return {
             ...base,
@@ -217,10 +337,20 @@ export class JulesResources {
           };
         }
 
+        if (activity.userMessaged) {
+          return {
+            ...base,
+            prompt: activity.userMessaged.userMessage,
+            sender: 'USER',
+          };
+        }
+
         if (activity.agentMessaged) {
           return {
             ...base,
-            message: activity.agentMessaged.message,
+            message:
+              activity.agentMessaged.message ||
+              activity.agentMessaged.agentMessage,
           };
         }
 
@@ -228,6 +358,7 @@ export class JulesResources {
           return {
             ...base,
             approvedAt: activity.planApproved.approvedAt,
+            planId: activity.planApproved.planId,
           };
         }
 
@@ -246,8 +377,9 @@ export class JulesResources {
           prompt: session.prompt,
           url: session.url,
           repository: this.getRepositoryLabel(session),
-          branch:
-            session.sourceContext?.githubRepoContext?.startingBranch || 'main',
+          branch: this.getBranchName(
+            session.sourceContext?.githubRepoContext?.startingBranch
+          ),
           automationMode: session.automationMode,
           requirePlanApproval: session.requirePlanApproval,
           created: session.createTime,
@@ -289,8 +421,10 @@ export class JulesResources {
         sessionId,
         activityType: latest.activityType,
         timestamp: latest.timestamp,
-        patch: latest.changeSet.patch,
-        fileCount: latest.changeSet.changes?.length || 0,
+        patch: latest.changeSet.gitPatch?.unidiffPatch || latest.changeSet.patch,
+        baseCommitId: latest.changeSet.gitPatch?.baseCommitId,
+        suggestedCommitMessage: latest.changeSet.gitPatch?.suggestedCommitMessage,
+        fileCount: this.getChangeSetFileCount(latest.changeSet),
         changes: latest.changeSet.changes || [],
       },
       null,

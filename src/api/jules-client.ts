@@ -4,6 +4,7 @@
  */
 
 import type {
+  Activity,
   Source,
   ListSourcesResponse,
   Session,
@@ -75,6 +76,23 @@ export class JulesClient {
 
     const query = searchParams.toString();
     return query ? `?${query}` : '';
+  }
+
+  /**
+   * Parses the timestamp associated with an activity, supporting both the
+   * legacy `timestamp` field and the current `createTime` field.
+   *
+   * @param activity - Activity to inspect.
+   * @returns Unix timestamp in milliseconds when parseable.
+   */
+  private getActivityTimestamp(activity: Activity): number | undefined {
+    const rawTimestamp = activity.createTime || activity.timestamp;
+    if (!rawTimestamp) {
+      return undefined;
+    }
+
+    const parsed = Date.parse(rawTimestamp);
+    return Number.isNaN(parsed) ? undefined : parsed;
   }
 
   /**
@@ -325,8 +343,8 @@ export class JulesClient {
    * @param sessionId - The ID of the session to approve the plan for.
    * @returns A promise that resolves with the updated session.
    */
-  async approvePlan(sessionId: string): Promise<Session> {
-    return this.request<Session>(`/sessions/${sessionId}:approvePlan`, {
+  async approvePlan(sessionId: string): Promise<Record<string, unknown>> {
+    return this.requestEmpty(`/sessions/${sessionId}:approvePlan`, {
       method: 'POST',
       body: '{}',
     });
@@ -342,8 +360,8 @@ export class JulesClient {
   async sendMessage(
     sessionId: string,
     request: SendMessageRequest
-  ): Promise<Session> {
-    return this.request<Session>(`/sessions/${sessionId}:sendMessage`, {
+  ): Promise<Record<string, unknown>> {
+    return this.requestEmpty(`/sessions/${sessionId}:sendMessage`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -371,7 +389,11 @@ export class JulesClient {
 
   /**
    * List activities for a session created after a given timestamp.
-   * GET /v1alpha/sessions/{id}/activities?filter=createTime>"{since}"
+   *
+   * The live Jules API currently rejects both the undocumented `filter=...`
+   * query shape and the documented `createTime=` query parameter for this
+   * endpoint, so we fetch activities page-by-page and filter client-side.
+   *
    * @param sessionId - The ID of the session to list activities for.
    * @param since - ISO timestamp boundary.
    * @param pageSize - The maximum number of activities to return.
@@ -382,12 +404,39 @@ export class JulesClient {
     since: string,
     pageSize = 50
   ): Promise<ListActivitiesResponse> {
-    return this.request<ListActivitiesResponse>(
-      `/sessions/${sessionId}/activities${this.buildQuery({
-        pageSize,
-        filter: `createTime>"${since.replace(/"/g, '')}"`,
-      })}`
-    );
+    const sinceTimestamp = Date.parse(since);
+    if (Number.isNaN(sinceTimestamp)) {
+      throw new JulesAPIError(`Invalid since timestamp: ${since}`);
+    }
+
+    const matchingActivities: Activity[] = [];
+    let pageToken: string | undefined;
+    let nextFilteredPageToken: string | undefined;
+
+    // Pull larger pages than the caller requested so we do not need to walk
+    // many tiny pages when the session has a long activity history.
+    const batchSize = Math.min(Math.max(pageSize, 50), 100);
+
+    do {
+      const response = await this.listActivities(sessionId, batchSize, pageToken);
+      const filtered = response.activities.filter((activity) => {
+        const activityTimestamp = this.getActivityTimestamp(activity);
+        return activityTimestamp !== undefined && activityTimestamp >= sinceTimestamp;
+      });
+
+      matchingActivities.push(...filtered);
+      pageToken = response.nextPageToken;
+
+      if (matchingActivities.length >= pageSize) {
+        nextFilteredPageToken = pageToken;
+        break;
+      }
+    } while (pageToken);
+
+    return {
+      activities: matchingActivities.slice(0, pageSize),
+      nextPageToken: nextFilteredPageToken,
+    };
   }
 
   /**

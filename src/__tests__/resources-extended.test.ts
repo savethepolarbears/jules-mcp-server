@@ -39,16 +39,22 @@ describe('JulesResources — extended coverage', () => {
             githubRepo: {
               owner: 'owner',
               repo: 'repo',
-              defaultBranch: 'main',
+              defaultBranch: { displayName: 'main' },
+              branches: [{ displayName: 'main' }, { displayName: 'develop' }],
               htmlUrl: 'https://github.com/owner/repo',
             },
           },
         ],
       });
 
-      const result = JSON.parse(await resources.getSources()) as { count: number; sources: { repository: string }[] };
+      const result = JSON.parse(await resources.getSources()) as {
+        count: number;
+        sources: { repository: string; defaultBranch: string; branches: string[] }[];
+      };
       expect(result.count).toBe(1);
       expect(result.sources[0].repository).toBe('owner/repo');
+      expect(result.sources[0].defaultBranch).toBe('main');
+      expect(result.sources[0].branches).toEqual(['main', 'develop']);
     });
   });
 
@@ -87,6 +93,53 @@ describe('JulesResources — extended coverage', () => {
       expect(result.session.id).toBe('sess-1');
       expect(result.activities).toHaveLength(1);
     });
+
+    it('formats modern Jules activity payloads', async () => {
+      (clientMock.getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'sess-1',
+        title: 'Test Session',
+        state: 'IN_PROGRESS',
+        prompt: 'fix the tests',
+        createTime: '2026-01-01T00:00:00Z',
+      });
+      (clientMock.listActivities as ReturnType<typeof vi.fn>).mockResolvedValue({
+        activities: [
+          {
+            name: 'activities/plan',
+            createTime: '2026-01-01T01:00:00Z',
+            originator: 'agent',
+            planGenerated: {
+              plan: {
+                id: 'plan-1',
+                steps: [{ title: 'Do the thing', description: 'Details' }],
+              },
+            },
+          },
+          {
+            name: 'activities/progress',
+            createTime: '2026-01-01T01:05:00Z',
+            originator: 'agent',
+            progressUpdated: {
+              title: 'Created branch.',
+              description: 'Created branch fix/example.',
+            },
+          },
+        ],
+      });
+
+      const result = JSON.parse(await resources.getSessionFull('sess-1')) as {
+        activities: { type: string; timestamp: string; stepCount?: number; message?: string }[];
+      };
+      expect(result.activities[0]).toMatchObject({
+        type: 'PLAN_GENERATED',
+        timestamp: '2026-01-01T01:00:00Z',
+        stepCount: 1,
+      });
+      expect(result.activities[1]).toMatchObject({
+        type: 'PROGRESS_UPDATED',
+        message: 'Created branch.',
+      });
+    });
   });
 
   describe('getSessionDiff', () => {
@@ -110,6 +163,37 @@ describe('JulesResources — extended coverage', () => {
       const result = JSON.parse(await resources.getSessionDiff('sess-1')) as { patch: string; fileCount: number };
       expect(result.patch).toContain('diff --git');
       expect(result.fileCount).toBe(1);
+    });
+
+    it('returns artifact-backed git patches from modern activities', async () => {
+      (clientMock.listActivities as ReturnType<typeof vi.fn>).mockResolvedValue({
+        activities: [
+          {
+            name: 'activities/progress',
+            createTime: '2026-01-01T00:00:00Z',
+            progressUpdated: { title: 'Updated file' },
+            artifacts: [
+              {
+                changeSet: {
+                  gitPatch: {
+                    baseCommitId: 'abc123',
+                    unidiffPatch: 'diff --git a/file.ts b/file.ts\n@@ -1 +1 @@',
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      const result = JSON.parse(await resources.getSessionDiff('sess-1')) as {
+        patch: string;
+        fileCount: number;
+        baseCommitId: string;
+      };
+      expect(result.patch).toContain('diff --git');
+      expect(result.fileCount).toBe(1);
+      expect(result.baseCommitId).toBe('abc123');
     });
 
     it('returns no-changeset message when none available', async () => {
