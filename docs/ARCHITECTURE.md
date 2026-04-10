@@ -670,17 +670,17 @@ User sees real-time progress
 | Package | Version | Purpose |
 | --------- | --------- | --------- |
 
-| `@modelcontextprotocol/sdk` | ^1.0.4 | MCP protocol implementation |
+| `@modelcontextprotocol/sdk` | ^1.29.0 | MCP protocol implementation |
 | `node-schedule` | ^2.1.1 | Cron scheduling engine |
-| `zod` | ^3.23.8 | Schema validation |
+| `zod` | ^4.3.6 | Schema validation |
 
 ### Development Dependencies
 
 | Package | Version | Purpose |
 | --------- | --------- | --------- |
 
-| `typescript` | ^5.7.2 | Type checking and compilation |
-| `@types/node` | ^22.10.2 | Node.js type definitions |
+| `typescript` | ^5.9.3 | Type checking and compilation |
+| `@types/node` | ^22.19.17 | Node.js type definitions |
 | `@types/node-schedule` | ^2.1.7 | node-schedule types |
 | `tsx` | ^4.19.2 | TypeScript execution for development |
 
