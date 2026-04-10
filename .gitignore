@@ -36,9 +36,9 @@ coverage/
 # Claude Code specific files - Contains user-specific configuration
 .claude/
 .agent/
-AGENTS.md
-CLAUDE.md
-GEMINI.md
+# AGENTS.md
+# CLAUDE.md
+# GEMINI.md
 
 # Future integration folders
 .genkit/
