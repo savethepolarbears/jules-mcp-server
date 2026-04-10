@@ -9,11 +9,11 @@ This file (`AGENTS.md`) is the canonical source of instruction and context for A
 
 ## Technology Stack & Environment
 - **Runtime:** Node.js `>=18.0.0` (Current development engine is v22+).
-- **Language:** TypeScript `^5.7.2`.
+- **Language:** TypeScript `^5.9.3`.
 - **Key Dependencies:**
-  - `@modelcontextprotocol/sdk` (`^1.28.0`) - Core protocol library.
+  - `@modelcontextprotocol/sdk` (`^1.29.0`) - Core protocol library.
   - `node-schedule` (`^2.1.1`) - Cron engine for thick-server persistence.
-  - `vitest` (`^4.1.2`) - Unit testing framework.
+  - `vitest` (`^4.1.4`) - Unit testing framework.
   - `zod` (`^4.3.6`) - Input validation.
 - **Package Manager:** `npm`.
 

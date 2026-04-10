@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Dependencies Upgrade**:
-  - Upgraded `@modelcontextprotocol/sdk` to `v1.28.0`
+  - Upgraded `@modelcontextprotocol/sdk` to `v1.29.0`
   - Upgraded `vitest` to `v4` to address brace-expansion vulnerabilities
   - Upgraded `zod` to `v4` and `knip` to `v6`
   - Upgraded `typescript` to `v6`
