@@ -3,14 +3,6 @@
   "version": "1.0.0",
   "description": "Model Context Protocol server for Google Jules API with scheduling capabilities",
   "type": "module",
-  "markdownlint-cli2": {
-    "config": {
-      "MD013": false,
-      "MD024": {
-        "siblings_only": true
-      }
-    }
-  },
   "main": "dist/index.js",
   "bin": {
     "jules-mcp": "dist/index.js"
@@ -20,11 +12,13 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint \"src/**/*.ts\"",
+    "lint": "eslint \"src/**/*.ts\" && npm run lint:md && npm run lint:knip",
     "mcp:smoke": "npm run build && node scripts/mcp-smoke.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
+    "lint:knip": "knip"
   },
   "keywords": [
     "mcp",
@@ -46,29 +40,17 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.19.17",
     "@types/node-schedule": "^2.1.7",
-    "@typescript-eslint/eslint-plugin": "^8.58.1",
-    "@typescript-eslint/parser": "^8.58.1",
     "@vitest/coverage-v8": "^4.1.4",
     "eslint": "^10.1.0",
     "globals": "^17.4.0",
     "knip": "^6.1.0",
+    "markdownlint-cli2": "^0.22.0",
     "tsx": "^4.19.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.2",
     "vitest": "^4.1.4"
   },
   "knip": {
-    "ignore": [
-      "node_modules/.vite/**",
-      "node_modules/.cache/**",
-      "pieces/**",
-      ".gemini*",
-      "README.md",
-      "docs/**"
-    ],
-    "entry": [
-      "src/index.ts"
-    ],
     "project": [
       "src/**/*.ts"
     ],

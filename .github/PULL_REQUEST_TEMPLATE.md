@@ -1,4 +1,4 @@
-## Description
+# Description
 <!-- Clear description of what this PR does -->
 
 ## Motivation
@@ -27,6 +27,7 @@
 - [ ] Documentation update
 
 ## Documentation
+
 - [ ] README.md updated
 - [ ] API_REFERENCE.md updated (if new tool/resource)
 - [ ] CHANGELOG.md updated
