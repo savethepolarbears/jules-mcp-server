@@ -181,6 +181,19 @@ describe("JulesTools", () => {
   // ── createRepolessTask ──────────────────────────────────────────────────
 
   describe("createRepolessTask", () => {
+
+    it("handles API failure correctly via executeWithErrorHandling", async () => {
+      vi.mocked(client.createSession).mockRejectedValue(new Error("API Down"));
+
+      const resultStr = await tools.createRepolessTask({
+        prompt: "test prompt",
+      });
+
+      const parsed = JSON.parse(resultStr);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toBe("An internal error occurred. Please check server logs.");
+    });
+
     it("creates a repoless task and returns formatted response", async () => {
       vi.mocked(client.createSession).mockResolvedValue({
         id: "sess-1",
@@ -217,6 +230,59 @@ describe("JulesTools", () => {
   // ── createCodingTask ──────────────────────────────────────────────────
 
   describe("createCodingTask", () => {
+
+    it("maps auto_create_pr and require_plan_approval correctly", async () => {
+      vi.mocked(client.createSession).mockResolvedValue(
+        makeSession({ id: "sess-new", state: "QUEUED" }),
+      );
+
+      await tools.createCodingTask({
+        prompt: "implement feature X",
+        source: "sources/github/owner/repo",
+        branch: "main",
+        auto_create_pr: true,
+        require_plan_approval: true,
+      });
+
+      expect(client.createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          automationMode: "AUTO_CREATE_PR",
+          requirePlanApproval: true,
+        })
+      );
+
+      await tools.createCodingTask({
+        prompt: "implement feature X",
+        source: "sources/github/owner/repo",
+        branch: "main",
+        auto_create_pr: false,
+        require_plan_approval: false,
+      });
+
+      expect(client.createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          automationMode: "AUTOMATION_MODE_UNSPECIFIED",
+          requirePlanApproval: false,
+        })
+      );
+    });
+
+    it("handles API failure correctly via executeWithErrorHandling for createCodingTask", async () => {
+      vi.mocked(client.createSession).mockRejectedValue(new Error("API Down"));
+
+      const resultStr = await tools.createCodingTask({
+        prompt: "test prompt long enough",
+        source: "sources/github/owner/repo",
+        branch: "main",
+        auto_create_pr: true,
+        require_plan_approval: false,
+      });
+
+      const parsed = JSON.parse(resultStr);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toBe("An internal error occurred. Please check server logs.");
+    });
+
     it("returns session details on success", async () => {
       vi.mocked(client.createSession).mockResolvedValue(
         makeSession({ id: "sess-new", state: "QUEUED" }),
@@ -353,6 +419,22 @@ describe("JulesTools", () => {
   // ── waitForSession ────────────────────────────────────────────────────
 
   describe("waitForSession", () => {
+
+    it("throws error for polling failure on Jules API", async () => {
+      vi.mocked(client.getSession).mockRejectedValue(new Error("Polling API Error"));
+
+      const resultStr = await tools.waitForSession({
+        session_id: "sess-1",
+        timeout_seconds: 30,
+        poll_interval_seconds: 5,
+        target_states: ["COMPLETED"],
+      });
+
+      const parsed = JSON.parse(resultStr);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toBe("An internal error occurred. Please check server logs.");
+    });
+
     it("resolves when target state reached", async () => {
       const toolsPrivate = tools as unknown as {
         delay: (ms: number) => Promise<void>;
@@ -408,6 +490,31 @@ describe("JulesTools", () => {
   // ── scheduleRecurringTask ─────────────────────────────────────────────
 
   describe("scheduleRecurringTask", () => {
+
+    it("maps auto_create_pr and require_plan_approval to payload correctly", async () => {
+      vi.mocked(CronEngine.validateCronExpression).mockReturnValue(true);
+      vi.mocked(storage.getTaskByName).mockResolvedValue(undefined);
+
+      await tools.scheduleRecurringTask({
+        task_name: "test task mapping",
+        cron_expression: "0 9 * * 1",
+        prompt: "update dependencies in repo",
+        source: "sources/github/owner/repo",
+        branch: "main",
+        auto_create_pr: true,
+        require_plan_approval: true,
+      });
+
+      expect(storage.upsertTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskPayload: expect.objectContaining({
+            automationMode: "AUTO_CREATE_PR",
+            requirePlanApproval: true,
+          })
+        })
+      );
+    });
+
     it("creates and schedules a task", async () => {
       vi.mocked(CronEngine.validateCronExpression).mockReturnValue(true);
       vi.mocked(storage.getTaskByName).mockResolvedValue(undefined);
