@@ -86,6 +86,44 @@ describe('JulesClient Resiliency', () => {
     // Should fail immediately without retrying
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
+
+  it('should truncate long error bodies', async () => {
+    const mockFetch = global.fetch as ReturnType<typeof vi.fn>;
+    const longError = 'A'.repeat(1000);
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      text: vi.fn().mockResolvedValue(longError),
+    });
+
+    try {
+      await client.listSources();
+    } catch (e) {
+      expect(e).toBeInstanceOf(JulesAPIError);
+      const apiError = e as JulesAPIError;
+      expect(apiError.response as string).toContain('... [truncated]');
+      expect((apiError.response as string).length).toBeLessThan(600); // 500 + length of '... [truncated]'
+    }
+  });
+
+  it('should throw immediately if error is an instance of JulesAPIError and not retry', async () => {
+    const mockFetch = global.fetch as ReturnType<typeof vi.fn>;
+    // Throwing JulesAPIError directly will trigger the early re-throw in catch block
+    mockFetch.mockRejectedValueOnce(new JulesAPIError('Direct API Error', 400));
+
+    await expect(client.listSources()).rejects.toThrow(JulesAPIError);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('should throw generic network error if unknown error is thrown and max retries exceeded', async () => {
+    const mockFetch = global.fetch as ReturnType<typeof vi.fn>;
+    mockFetch.mockRejectedValue(new Error('Unknown generic error'));
+
+    await expect(client.listSources()).rejects.toThrow('Network error: Unknown generic error');
+    // 1 initial + max retries
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe('JulesClient Methods', () => {
