@@ -3,6 +3,7 @@ import { CronEngine } from "../scheduler/cron-engine.js";
 import { ScheduleStorage } from "../storage/schedule-store.js";
 import { JulesClient } from "../api/jules-client.js";
 import type { ScheduledTask } from "../types/schedule.js";
+import type { Session } from "../types/jules-api.js";
 import { randomUUID } from "crypto";
 import schedule from "node-schedule";
 
@@ -117,6 +118,94 @@ describe("CronEngine", () => {
       expect(() => engine.scheduleTask(task)).not.toThrow();
       expect(spyCancel).toHaveBeenCalledWith(task.id);
       expect(spySchedule).toHaveBeenCalled();
+    });
+
+    it("should successfully execute a task and call the Jules client", async () => {
+      const task: ScheduledTask = {
+        id: "task-test-execution",
+        name: "test-exec-task",
+        cron: "0 0 * * *",
+        taskPayload: {
+          prompt: "test run",
+          source: "sources/github/owner/repo",
+          branch: "main",
+          automationMode: "AUTO_CREATE_PR",
+        },
+        createdAt: new Date().toISOString(),
+        enabled: true,
+      };
+
+      let executedCallback: (() => Promise<void>) | null = null;
+      vi.spyOn(schedule, "scheduleJob").mockImplementation((cron, cb) => {
+        executedCallback = cb as () => Promise<void>;
+        return { cancel: vi.fn(), nextInvocation: vi.fn() } as unknown as schedule.Job;
+      });
+
+      engine.scheduleTask(task);
+      expect(executedCallback).not.toBeNull();
+
+      vi.mocked(client.createSession).mockResolvedValue({ id: "sess-123" } as unknown as Session);
+
+      if (executedCallback) {
+        await (executedCallback as () => Promise<void>)();
+      }
+
+      expect(client.createSession).toHaveBeenCalledWith({
+        prompt: "test run",
+        sourceContext: {
+          source: "sources/github/owner/repo",
+          githubRepoContext: { startingBranch: "main" },
+        },
+        automationMode: "AUTO_CREATE_PR",
+        requirePlanApproval: undefined,
+        title: undefined,
+      });
+      expect(storage.updateLastRun).toHaveBeenCalledWith(
+        "task-test-execution",
+        expect.any(String),
+        "sess-123",
+      );
+    });
+
+    it("should handle execution failures and log appropriately", async () => {
+      const task: ScheduledTask = {
+        id: "task-fail",
+        name: "test-fail",
+        cron: "0 0 * * *",
+        taskPayload: {
+          prompt: "test fail",
+          source: "sources/github/owner/repo",
+          automationMode: "AUTO_CREATE_PR",
+        },
+        createdAt: new Date().toISOString(),
+        enabled: true,
+      };
+
+      let executedCallback: (() => Promise<void>) | null = null;
+      vi.spyOn(schedule, "scheduleJob").mockImplementation((cron, cb) => {
+        executedCallback = cb as () => Promise<void>;
+        return { cancel: vi.fn(), nextInvocation: vi.fn() } as unknown as schedule.Job;
+      });
+
+      engine.scheduleTask(task);
+
+      // Setup mock to throw error all 3 times to exhaust retries
+      vi.mocked(client.createSession).mockRejectedValue(new Error("API Down"));
+
+      if (executedCallback) {
+        await (executedCallback as () => Promise<void>)();
+      }
+
+      // Should still update the last run but without session ID
+      expect(storage.updateLastRun).toHaveBeenCalledWith(
+        "task-fail",
+        expect.any(String),
+        undefined,
+      );
+
+      expect(mockLogger).toHaveBeenCalledWith(
+        expect.stringContaining('failed after 3 retries: API Down')
+      );
     });
   });
 

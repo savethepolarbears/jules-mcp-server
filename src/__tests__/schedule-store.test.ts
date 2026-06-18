@@ -172,6 +172,110 @@ describe("ScheduleStorage", () => {
       );
     });
   });
+
+  describe("CRUD operations", () => {
+    const mockTask = {
+      id: "task-1",
+      name: "Test Task",
+      cron: "0 * * * *",
+      taskPayload: { prompt: "test", source: "test", automationMode: "AUTO_CREATE_PR" as const },
+      createdAt: "2026-01-01T00:00:00Z",
+      enabled: true,
+    };
+
+    beforeEach(() => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fsPromises.writeFile).mockResolvedValue();
+      vi.mocked(fsPromises.rename).mockResolvedValue();
+    });
+
+    it("should upsert a task and update cache", async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        await createEncryptedPayload({ schedules: {}, version: "1.0.0" }, "test-key")
+      );
+
+      await storage.upsertTask(mockTask);
+
+      // Reading from cache since load was called
+      const task = await storage.getTask("task-1");
+      expect(task).toEqual(mockTask);
+      expect(fsPromises.writeFile).toHaveBeenCalled();
+    });
+
+    it("should get a task by name", async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        await createEncryptedPayload({ schedules: { "task-1": mockTask }, version: "1.0.0" }, "test-key")
+      );
+
+      const task = await storage.getTaskByName("Test Task");
+      expect(task).toEqual(mockTask);
+
+      const notFound = await storage.getTaskByName("Unknown");
+      expect(notFound).toBeUndefined();
+    });
+
+    it("should list all tasks", async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        await createEncryptedPayload({ schedules: { "task-1": mockTask }, version: "1.0.0" }, "test-key")
+      );
+
+      const tasks = await storage.listTasks();
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0]).toEqual(mockTask);
+    });
+
+    it("should delete a task", async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        await createEncryptedPayload({ schedules: { "task-1": mockTask }, version: "1.0.0" }, "test-key")
+      );
+
+      const deleted = await storage.deleteTask("task-1");
+      expect(deleted).toBe(true);
+
+      const tasks = await storage.listTasks();
+      expect(tasks).toHaveLength(0);
+      expect(fsPromises.writeFile).toHaveBeenCalled();
+    });
+
+    it("should return false when deleting non-existent task", async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        await createEncryptedPayload({ schedules: {}, version: "1.0.0" }, "test-key")
+      );
+
+      const deleted = await storage.deleteTask("unknown");
+      expect(deleted).toBe(false);
+    });
+
+    it("should update last run information", async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        await createEncryptedPayload({ schedules: { "task-1": mockTask }, version: "1.0.0" }, "test-key")
+      );
+
+      await storage.updateLastRun("task-1", "2026-01-02T00:00:00Z", "sess-1");
+
+      const task = await storage.getTask("task-1");
+      expect(task?.lastRun).toBe("2026-01-02T00:00:00Z");
+      expect(task?.lastSessionId).toBe("sess-1");
+      expect(fsPromises.writeFile).toHaveBeenCalled();
+    });
+
+    it("should invalidate cache and reload on next access", async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValue(
+        await createEncryptedPayload({ schedules: { "task-1": mockTask }, version: "1.0.0" }, "test-key")
+      );
+
+      await storage.listTasks(); // Populates cache
+      expect(fsPromises.readFile).toHaveBeenCalledTimes(1);
+
+      await storage.listTasks(); // Reads from cache
+      expect(fsPromises.readFile).toHaveBeenCalledTimes(1);
+
+      storage.invalidateCache();
+
+      await storage.listTasks(); // Reloads from disk
+      expect(fsPromises.readFile).toHaveBeenCalledTimes(2);
+    });
+  });
 });
 
 describe("Mutex", () => {
