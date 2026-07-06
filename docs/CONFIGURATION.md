@@ -1,3 +1,10 @@
+---
+title: CONFIGURATION
+tags: []
+created: '2026-03-13T18:54:17.853243+00:00'
+modified: '2026-03-13T18:54:17.853243+00:00'
+type: note
+---
 # Configuration Guide
 
 ## Jules MCP Server Configuration
@@ -12,9 +19,9 @@ This guide covers all configuration options for the Jules MCP Server.
 
 Your Google Jules API key. **This is required** for the server to function.
 
-#### How to obtain
+**How to obtain:**
 
-1. Visit <https://jules.google/settings>
+1. Visit https://jules.google/settings
 2. Click "Create API Key"
 3. Copy the generated key
 4. Set as environment variable
@@ -39,29 +46,10 @@ export JULES_ALLOWED_REPOS="myorg/frontend,myorg/backend-api"
 
 **Format:** `owner/repo` (without the `sources/github/` prefix)
 
-#### Behavior
-
-- **Required.** If not set, repository validation will fail and task creation will be rejected.
-- Only listed repositories can be modified through the server.
-
-#### JULES_ENCRYPTION_KEY
-
-Encryption key for local schedules. **Strongly Recommended.**
-
-```bash
-export JULES_ENCRYPTION_KEY="your-32-byte-hex-key"
-```
-
-**Generation:**
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
 **Behavior:**
 
-- If **not set**: `JULES_API_KEY` is used as the default encryption key.
-- **Security Recommendation:** Use a dedicated, random key for schedule encryption to ensure security if you rotate your `JULES_API_KEY`.
+- If **not set**: All connected repositories can be used
+- If **set**: Only listed repositories can be used; attempts to use others will be rejected
 
 #### JULES_DEFAULT_BRANCH
 
@@ -88,13 +76,13 @@ export LOG_LEVEL="debug"
 
 ### Claude Desktop
 
-#### Location
+**Location:**
 
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 - Linux: `~/.config/Claude/claude_desktop_config.json`
 
-#### Configuration
+**Configuration:**
 
 ```json
 {
@@ -108,9 +96,10 @@ export LOG_LEVEL="debug"
     }
   }
 }
+
 ```
 
-#### After configuration
+**After configuration:**
 
 1. Restart Claude Desktop
 2. Look for "Jules MCP Server started successfully" in logs
@@ -147,11 +136,9 @@ For other MCP-compatible clients, use the stdio transport:
 
 ### Schedule Persistence
 
-Schedules are stored in: `~/.jules-mcp/schedules.enc`
+Schedules are stored in: `~/.jules-mcp/schedules.json`
 
-This file is **AES-256-GCM encrypted** to protect your coding task prompts and metadata. Accessing this file requires the `JULES_ENCRYPTION_KEY` (or `JULES_API_KEY` if not set).
-
-#### Schema (Unencrypted representation)
+**Schema:**
 
 ```json
 {
@@ -176,11 +163,9 @@ This file is **AES-256-GCM encrypted** to protect your coding task prompts and m
 }
 ```
 
-**Auto-Migration:** If a version using `schedules.json` is detected, the server automatically encrypts and migrates its content to `schedules.enc` upon startup.
-
 **Backup:** Regularly backup this file if you have critical schedules
 
-**Migration:** If you move the server to a new machine, copy this file to preserve schedules. You must also use the same `JULES_ENCRYPTION_KEY` on the new machine.
+**Migration:** If you move the server to a new machine, copy this file to preserve schedules
 
 ### Changing Storage Location
 
@@ -198,14 +183,14 @@ this.storageDir = process.env.JULES_STORAGE_DIR || join(homedir(), '.jules-mcp')
 
 ### 1. API Key Management
 
-#### DO
+**DO:**
 
 - Store in environment variables
 - Use a secrets manager in production (e.g., AWS Secrets Manager, HashiCorp Vault)
 - Rotate keys periodically
 - Use separate keys for dev/staging/prod
 
-#### DON'T
+**DON'T:**
 
 - Commit keys to git
 - Share keys between team members
@@ -235,7 +220,7 @@ This ensures human review before code modification.
 
 Regularly review `jules://schedules/history` to audit autonomous executions:
 
-```text
+```
 "Show me all scheduled task executions from the last week"
 ```
 
@@ -298,7 +283,7 @@ For team deployments, you might want per-user API keys. Extend the server to acc
 
 Jules has rate limits. Monitor your usage:
 
-```text
+```
 "How many active Jules sessions do I have?"
 ```
 
@@ -310,7 +295,8 @@ The server polls for session status. To reduce API calls, increase polling inter
 
 Avoid scheduling too many tasks to run simultaneously. Stagger cron times:
 
-```text
+```
+
 Task 1: "0 9 * * 1"  (9:00 AM Monday)
 Task 2: "15 9 * * 1" (9:15 AM Monday)
 Task 3: "30 9 * * 1" (9:30 AM Monday)
@@ -320,6 +306,9 @@ Task 3: "30 9 * * 1" (9:30 AM Monday)
 
 For issues or questions:
 
-- Jules API: <https://developers.google.com/jules/api>
-- MCP Protocol: <https://modelcontextprotocol.io>
+- Jules API: https://developers.google.com/jules/api
+- MCP Protocol: https://modelcontextprotocol.io
 - This Server: Open an issue on the repository
+
+<!-- backlinks -->
+**Up:** [[README]]

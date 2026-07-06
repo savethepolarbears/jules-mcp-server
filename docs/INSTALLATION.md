@@ -1,3 +1,10 @@
+---
+title: INSTALLATION
+tags: []
+created: '2026-03-13T18:54:17.853231+00:00'
+modified: '2026-03-13T18:54:17.853231+00:00'
+type: note
+---
 # Installation Guide
 
 Complete installation instructions for the Jules MCP Server.
@@ -71,7 +78,7 @@ jules-mcp
 
 ### Step 1: Generate Jules API Key
 
-1. Visit **<https://jules.google/settings>**
+1. Visit **https://jules.google/settings**
 2. Sign in with your Google account
 3. Navigate to **"API Keys"** section
 4. Click **"Create New API Key"**
@@ -80,7 +87,7 @@ jules-mcp
 
 ### Step 2: Configure Environment
 
-#### Option A: Environment Variable (Recommended)
+**Option A: Environment Variable (Recommended)**
 
 ```bash
 # macOS/Linux (add to ~/.zshrc or ~/.bashrc)
@@ -93,7 +100,7 @@ $env:JULES_API_KEY = "your-key-here"
 setx JULES_API_KEY "your-key-here"
 ```
 
-#### Option B: .env File
+**Option B: .env File**
 
 ```bash
 # Create .env file in project root
@@ -108,19 +115,19 @@ echo 'JULES_API_KEY=your-key-here' > .env
 
 #### Step 1: Locate Configuration File
 
-#### macOS
+**macOS:**
 
 ```bash
 ~/Library/Application Support/Claude/claude_desktop_config.json
 ```
 
-#### Windows
+**Windows:**
 
 ```powershell
 %APPDATA%\Claude\claude_desktop_config.json
 ```
 
-#### Linux
+**Linux:**
 
 ```bash
 ~/.config/Claude/claude_desktop_config.json
@@ -207,7 +214,7 @@ If using an MCP extension for VS Code:
 
 **Before using the MCP server**, connect GitHub repositories through Jules:
 
-1. Visit **<https://jules.google>**
+1. Visit **https://jules.google**
 2. Click **"Connect Repository"** or **"Add Source"**
 3. Install the Jules GitHub App
 4. Select repositories to grant access
@@ -255,8 +262,7 @@ Ask Claude:
 ### "Cannot find module '@modelcontextprotocol/sdk'"
 
 **Cause:** Dependencies not installed
-
-#### Fix
+**Fix:**
 
 ```bash
 npm install
@@ -265,8 +271,7 @@ npm install
 ### "JULES_API_KEY environment variable is required"
 
 **Cause:** API key not set
-
-#### Fix
+**Fix:**
 
 ```bash
 export JULES_API_KEY="your-key"
@@ -277,20 +282,20 @@ Or add to `claude_desktop_config.json` in the `env` section.
 ### "Permission denied" when running dist/index.js
 
 **Cause:** File not executable
-
-#### Fix
+**Fix:**
 
 ```bash
+
 chmod +x dist/index.js
 ```
 
 ### "TypeScript compilation failed"
 
 **Cause:** TypeScript errors in code
-
-#### Fix
+**Fix:**
 
 ```bash
+
 npm run typecheck  # See errors
 # Fix errors, then
 npm run build
@@ -298,7 +303,7 @@ npm run build
 
 ### Claude Desktop not detecting server
 
-#### Checklist
+**Checklist:**
 
 1. ✅ Path in config is absolute (not relative)
 2. ✅ `dist/index.js` exists
@@ -306,7 +311,7 @@ npm run build
 4. ✅ Restarted Claude completely
 5. ✅ Check Claude logs for errors
 
-#### Claude Logs Location
+**Claude Logs Location:**
 
 - macOS: `~/Library/Logs/Claude/`
 - Windows: `%APPDATA%\Claude\logs\`
@@ -314,10 +319,9 @@ npm run build
 ### "404 Not Found" from Jules API
 
 **Cause:** Repository not connected to Jules
+**Fix:**
 
-#### Fix
-
-1. Visit <https://jules.google>
+1. Visit https://jules.google
 2. Connect the repository
 3. Wait for sync
 4. Try again
@@ -340,7 +344,7 @@ npm run build
 
 - Recommended shell: bash
 - Add exports to `~/.bashrc`
-- Use nvm for Node.js: <https://github.com/nvm-sh/nvm>
+- Use nvm for Node.js: https://github.com/nvm-sh/nvm
 
 ## Upgrade Instructions
 

@@ -10,6 +10,7 @@ assignees: ''
 <!-- Clear description of the bug -->
 
 ## Steps to Reproduce
+
 1. Configure server with...
 2. Call tool X with...
 3. Observe error...
@@ -21,6 +22,7 @@ assignees: ''
 <!-- What actually happens -->
 
 ## Environment
+
 - **OS**: [macOS / Windows / Linux]
 - **Node version**: [e.g., 20.10.0]
 - **MCP Host**: [Claude Desktop / Cursor / Other]

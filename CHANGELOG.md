@@ -1,3 +1,10 @@
+---
+title: CHANGELOG
+tags: []
+created: '2026-03-13T18:54:18.140037+00:00'
+modified: '2026-03-13T18:54:18.140037+00:00'
+type: note
+---
 # Changelog
 
 All notable changes to the Jules MCP Server will be documented in this file.
@@ -48,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `get_session_status` - Poll session progress
 - `schedule_recurring_task` - Create cron-based recurring tasks
 - `list_schedules` - View all schedules
+
 - `delete_schedule` - Remove schedules
 
 #### MCP Prompts
@@ -55,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `refactor_module` - Guided refactoring template
 - `setup_weekly_maintenance` - Automated maintenance workflow
 - `audit_security` - Security audit template
+
 - `fix_failing_tests` - Test failure resolution
 - `update_dependencies` - Dependency management template
 
@@ -62,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Local persistence**: Schedules stored in `~/.jules-mcp/schedules.json`
 - **Cron engine**: Built on `node-schedule` for reliable execution
+
 - **State management**: Survives server restarts
 - **Execution history**: Audit trail for compliance
 - **Timezone support**: Configure execution timezone
@@ -69,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Security Features
 
 - **API key validation**: Required environment variable
+
 - **Repository allowlist**: `JULES_ALLOWED_REPOS` restriction
 - **Plan approval enforcement**: Human-in-the-loop gates
 - **Audit logging**: Complete execution history
@@ -85,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - `README.md` - Complete feature overview and installation
+
 - `QUICKSTART.md` - 5-minute setup guide
 - `CONFIGURATION.md` - All configuration options
 - `SECURITY.md` - Security best practices
@@ -95,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Infrastructure
 
 - TypeScript configuration
+
 - Package.json with proper module settings
 - Build scripts (build, dev, typecheck)
 - .gitignore for security and cleanliness
@@ -108,6 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Webhook integration**: Real-time notifications instead of polling
 - **Native scheduling**: Migrate to Jules API when scheduling endpoints released
 - **Session cancellation**: Cancel in-progress sessions
+
 - **Batch operations**: Create multiple sessions atomically
 
 #### Medium-term

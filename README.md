@@ -1,3 +1,10 @@
+---
+title: README
+tags: []
+created: '2026-03-13T18:54:17.853331+00:00'
+modified: '2026-03-13T18:54:17.853331+00:00'
+type: note
+---
 # Jules MCP Server
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
@@ -22,13 +29,12 @@ This MCP server bridges the Google Jules coding agent with AI assistants, allowi
 - **Monitor progress** - Track session states and review generated plans
 - **Approve plans** - Human-in-the-loop control before code changes
 - **Manage workflows** - Send feedback and iterate on Jules's work
-- **Activepieces Integration** - Use the included Jules piece (`pieces/jules`) to automate coding tasks in your Activepieces workflows
 
 ### Architecture: The "Thick Server" Pattern
 
 Since the Jules API v1alpha is **stateless** (no native scheduling endpoints), this server implements a **local scheduling engine**:
 
-- **Persistent Storage**: Schedules stored in `~/.jules-mcp/schedules.enc`
+- **Persistent Storage**: Schedules stored in `~/.jules-mcp/schedules.json`
 - **Cron Engine**: Uses `node-schedule` for reliable task execution
 - **Survives Restarts**: Schedules are rehydrated on server startup
 - **Autonomous Execution**: Scheduled tasks run even without active IDE sessions
@@ -38,29 +44,26 @@ Since the Jules API v1alpha is **stateless** (no native scheduling endpoints), t
 ### Prerequisites
 
 - **Node.js** 18.0.0 or higher
-- **npm** 9.0.0 or higher
 - **Jules API Key** - Generate at [jules.google/settings](https://jules.google/settings)
-- **GitHub Repositories** - Ensure your repositories are connected to Jules and the GitHub app is installed.
+- **GitHub Repositories** - Connect repos to Jules via the web UI first
 
-### Developer Setup
+### Setup
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/savethepolarbears/jules-mcp-server.git
-cd jules-mcp-server
+# Clone or download this repository
+cd jules-mcp
 
-# 2. Install dependencies
+# Install dependencies
 npm install
 
-# 3. Configure environment
-# Copy example env and fill in your JULES_API_KEY
-cp .env.example .env
-
-# 4. Build the project
+# Build TypeScript
 npm run build
 
-# 5. Run a smoke test to verify connectivity
-npm run mcp:smoke
+# Set your API key
+export JULES_API_KEY="your-key-here"
+
+# Test the server
+npm start
 ```
 
 ### Quick smoke test (MCP stdio)
@@ -73,7 +76,7 @@ npm run mcp:smoke
 
 Expected output (with a valid key):
 
-- Lists 11 tools, 5 prompts, and the 4 core resources
+- Lists 6 tools, 5 prompts, and the 4 core resources
 - Attempts to read a fake session ID and reports a Jules 404 (proves real API calls work)
 - Attempts a tool call with dummy data and reports the API error without crashing
 
@@ -94,30 +97,16 @@ jules-mcp
 Create a `.env` file or set these in your shell:
 
 ```bash
-# Required - Your Jules API Key
+# Required
 JULES_API_KEY=your_jules_api_key_here
 
-# Strongly Recommended - Encryption key for local schedules
-# Using JULES_API_KEY as fallback means rotating your API key will make all scheduled tasks unreadable.
-# Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-JULES_ENCRYPTION_KEY=your_strong_random_key_here
-
-# Required for create_coding_task. Comma-separated list of authorized repositories.
+# Optional - Security allowlist (comma-separated repo names)
+# If set, only these repos can be modified
 JULES_ALLOWED_REPOS=owner/repo1,owner/repo2
 
-# Optional - Default branch for coding tasks
+# Optional - Default branch
 JULES_DEFAULT_BRANCH=main
 ```
-
-## Security & Privacy
-
-This server is designed with a "security-first" approach to protect your repositories and data:
-
-- **Restrictive File Permissions**: Local schedule storage (`~/.jules-mcp`) uses `0o700` directory permissions and `0o600` file permissions, ensuring only the owner can read or write task data.
-- **Encrypted Local State**: All scheduled tasks are stored using **AES-256-GCM** encryption. A unique, random 16-byte salt is generated for every write operation to prevent offline attacks and ensure data integrity.
-- **PII Leak Prevention**: Raw Jules API responses are sanitized and truncated (max 500 characters) before being included in logs or exceptions, preventing accidental disclosure of proprietary code or personal information in system logs.
-- **Generic Validation Errors**: The server returns generic error messages when repository validation fails, preventing the enumeration of your private repository allowlist.
-- **Human-in-the-Loop**: Use the `require_plan_approval: true` flag to ensure Jules never modifies code without your explicit review and approval of the generated plan.
 
 ### Claude Desktop Configuration
 
@@ -163,7 +152,7 @@ Once configured, your AI assistant can use Jules through natural language:
 
 ### Creating Immediate Tasks
 
-```text
+```
 "Use Jules to add unit tests for the authentication module in my-app-backend repository"
 ```
 
@@ -175,20 +164,21 @@ The assistant will:
 
 ### Scheduling Recurring Tasks
 
-```text
+```
 "Schedule Jules to update dependencies every Monday at 9 AM in my-app-backend"
 ```
 
 The assistant will:
 
 1. Call `schedule_recurring_task` with cron `"0 9 * * 1"`
-2. Save the schedule to `~/.jules-mcp/schedules.enc`
+2. Save the schedule to `~/.jules-mcp/schedules.json`
 3. Confirm the next execution time
 
 ### Monitoring Progress
 
-```text
+```
 "Check the status of Jules session abc123"
+
 ```
 
 The assistant will:
@@ -199,7 +189,8 @@ The assistant will:
 
 ### Reviewing and Approving Plans
 
-```text
+```
+
 "Show me Jules's plan for session abc123 and approve it"
 ```
 
@@ -209,23 +200,95 @@ The assistant will:
 2. Display the plan steps to you
 3. Call `manage_session` with `action=approve_plan` after your confirmation
 
-## Migration Guide
+## Available Resources
 
-The server has migrated from plain JSON storage (`schedules.json`) to encrypted storage (`schedules.enc`).
+Resources are read-only context that the AI can access:
 
-- **Auto-Migration**: Upon startup, if `schedules.json` is detected, the server automatically encrypts its contents and saves them to `schedules.enc`, then deletes the unencrypted file.
-- **Backwards Compatibility**: No manual action is required if you are upgrading from a version that used `schedules.json`.
+| URI | Description |
+|-----|-------------|
+| `jules://sources` | Connected GitHub repositories |
+| `jules://sessions/list` | Recent Jules sessions |
+| `jules://sessions/{id}/full` | Complete session details with activities |
+| `jules://schedules` | Active scheduled tasks |
+| `jules://schedules/history` | Execution history |
 
-## Documentation
+## Available Tools
 
-Detailed documentation has been moved to the `docs/` folder:
+Tools are actions the AI can execute:
 
-- [API Reference](docs/API_REFERENCE.md) - Complete details on available MCP Tools, Resources, and Prompts.
-- [Architecture](docs/ARCHITECTURE.md) - System design and the "Thick Server" pattern.
-- [Configuration](docs/CONFIGURATION.md) - Environment variables and setup instructions.
-- [Examples](docs/EXAMPLES.md) - Example workflows and usage patterns.
-- [Quickstart](docs/QUICKSTART.md) - A fast guide to getting up and running.
-- [Activepieces Integration](pieces/jules/README.md) - Documentation for the custom Google Jules Activepieces integration.
+### create_coding_task
+
+Creates an immediate Jules coding session.
+
+**Parameters:**
+
+- `prompt` (required) - Natural language task instruction
+- `source` (required) - Repository (format: `sources/github/owner/repo`)
+- `branch` (optional) - Target branch (default: `main`)
+- `auto_create_pr` (optional) - Auto-create PR (default: `true`)
+- `require_plan_approval` (optional) - Pause for review (default: `false`)
+- `title` (optional) - Session title
+
+**Returns:** Session ID and monitoring URL
+
+### manage_session
+
+Manage active sessions (approve plans, send feedback).
+
+**Parameters:**
+
+- `session_id` (required)
+- `action` (required) - `"approve_plan"` or `"send_message"`
+
+- `message` (optional) - Required for `send_message`
+
+### get_session_status
+
+Check session status and get next steps.
+
+**Parameters:**
+
+- `session_id` (required)
+
+### schedule_recurring_task
+
+Schedule a task to run on a cron schedule.
+
+**Parameters:**
+
+- `task_name` (required) - Unique schedule identifier
+- `cron_expression` (required) - Standard cron format
+- `prompt` (required) - Task instruction
+- `source` (required) - Repository resource name
+- `branch`, `auto_create_pr`, `require_plan_approval`, `timezone` (optional)
+
+**Cron Examples:**
+
+- `"0 9 * * 1"` - Every Monday at 9 AM
+- `"0 2 * * *"` - Every day at 2 AM
+- `"0 0 1 * *"` - First day of each month at midnight
+
+### list_schedules
+
+List all active scheduled tasks with next run times.
+
+### delete_schedule
+
+Remove a scheduled task.
+
+**Parameters:**
+
+- `task_name` (required)
+
+## Available Prompts
+
+Prompts are templates that guide best practices:
+
+- `refactor_module` - Guided refactoring workflow
+- `setup_weekly_maintenance` - Automated maintenance setup
+- `audit_security` - Comprehensive security audit
+- `fix_failing_tests` - Test failure resolution
+- `update_dependencies` - Dependency update with breaking change handling
 
 ## Security Considerations
 
@@ -249,20 +312,11 @@ This prevents accidental modifications to production or sensitive repos.
 
 For critical repositories, **always** set `require_plan_approval: true`:
 
-```text
+```
 "Create a task but require plan approval before any code changes"
 ```
 
 This ensures human review before Jules modifies code.
-
-### Safe OpenClaw/Codex Integration
-
-When integrating with autonomous AI agents like OpenClaw or Codex, additional safety measures are enforced:
-
-1. **Auto-PR Defaults**: Prompt templates now encourage setting `auto_create_pr: true` to ensure all AI-driven changes are reviewed as Pull Requests before merging.
-2. **Mandatory Review**: It is strongly recommended to set `require_plan_approval: true` for tasks generated by other AI systems to establish trust before allowing direct changes.
-3. **Quota-Aware Scheduling**: To respect API limits and prevent unintended runaway tasks, the cron engine validates all schedules. **Schedules must not run more frequently than once per hour**. Daily or weekly intervals are highly recommended for automated maintenance.
-4. **Resilient Storage**: Local schedules are saved using atomic file writes with corrupted-state backups to prevent the server from crashing during unexpected failures.
 
 ### Audit Logging
 
@@ -286,7 +340,7 @@ export JULES_API_KEY="your-key-here"
 
 ### Schedules not persisting
 
-Check that `~/.jules-mcp/schedules.enc` exists and is writable.
+Check that `~/.jules-mcp/schedules.json` exists and is writable.
 
 ### TypeScript compilation errors
 
@@ -296,39 +350,24 @@ npm run typecheck
 
 ## Development
 
-### Documentation
-
-This project uses **JSDoc** for comprehensive code documentation. Every public function, method, and class is documented with clear descriptions of purpose, parameters, and return values.
-
-To explore the architecture and API details, check the [docs/](docs/) directory.
-
-### Testing
-
-We use **Vitest** for unit and integration testing.
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Generate coverage report
-npm run test:coverage
-```
-
 ### Project Structure
 
-```text
+```
 src/
-  types/          # TypeScript type definitions (Jules API & local state)
-  api/            # Jules API client layer with retry logic
-  storage/        # Secure persistence layer (encrypted JSON)
-  scheduler/      # Cron engine for recurring task management
-  mcp/            # MCP protocol layer (tools, resources, prompts)
-  utils/          # Security, rate limiting, and string utilities
-  index.ts        # Server entry point and MCP handler setup
-pieces/           # Activepieces integration (Google Jules piece)
+  types/          # TypeScript type definitions
+    jules-api.ts  # Jules API types
+    schedule.ts   # Schedule types
+  api/            # API client layer
+    jules-client.ts
+  storage/        # Persistence layer
+    schedule-store.ts
+  scheduler/      # Cron engine
+    cron-engine.ts
+  mcp/            # MCP protocol layer
+    resources.ts  # Resources implementation
+    tools.ts      # Tools implementation
+    prompts.ts    # Prompt templates
+  index.ts        # Main entry point
 ```
 
 ### Build Commands
@@ -344,7 +383,7 @@ npm run typecheck  # Type checking only
 This server provides complete coverage of the Jules v1alpha API:
 
 | Endpoint | Method | MCP Mapping |
-| ---------- | -------- | ------------- |
+|----------|--------|-------------|
 | `/sources` | GET | Resource: `jules://sources` |
 | `/sources/{name}` | GET | Included in full session resource |
 | `/sessions` | POST | Tool: `create_coding_task` |
@@ -370,10 +409,10 @@ When Jules API adds native scheduling:
 
 ## Resources
 
-- **Jules API Documentation**: <https://developers.google.com/jules/api>
-- **Jules Web Interface**: <https://jules.google>
-- **Model Context Protocol**: <https://modelcontextprotocol.io>
-- **MCP TypeScript SDK**: <https://github.com/modelcontextprotocol/typescript-sdk>
+- **Jules API Documentation**: https://developers.google.com/jules/api
+- **Jules Web Interface**: https://jules.google
+- **Model Context Protocol**: https://modelcontextprotocol.io
+- **MCP TypeScript SDK**: https://github.com/modelcontextprotocol/typescript-sdk
 
 ## License
 
@@ -387,3 +426,17 @@ This is an open-source implementation. Contributions welcome for:
 - Enhanced error handling
 - Webhook support (when Jules API adds it)
 - Advanced scheduling features (conditional execution, dependency chains)
+
+## Contents
+
+- [[PROJECT_SUMMARY]]
+- [[EXAMPLES]]
+- [[ARCHITECTURE]]
+- [[API_REFERENCE]]
+- [[CHANGELOG]]
+- [[QUICKSTART]]
+- [[VERIFICATION]]
+- [[CONFIGURATION]]
+- [[CONTRIBUTING]]
+- [[INSTALLATION]]
+- [[SECURITY]]

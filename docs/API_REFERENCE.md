@@ -1,3 +1,10 @@
+---
+title: API_REFERENCE
+tags: []
+created: '2026-03-13T18:54:17.852781+00:00'
+modified: '2026-03-13T18:54:17.852781+00:00'
+type: note
+---
 # Jules MCP Server API Reference
 
 Complete reference for all Resources, Tools, and Prompts exposed by this MCP server.
@@ -12,7 +19,7 @@ Resources are read-only data that provide context to the AI assistant.
 
 **MIME Type:** `application/json`
 
-#### Response Format
+**Response Format:**
 
 ```json
 {
@@ -39,7 +46,7 @@ Resources are read-only data that provide context to the AI assistant.
 
 **MIME Type:** `application/json`
 
-#### Response Format
+**Response Format:**
 
 ```json
 {
@@ -62,34 +69,6 @@ Resources are read-only data that provide context to the AI assistant.
 
 ---
 
-### jules://sessions/{id}/activities
-
-**Description:** Raw activity log for a specific session
-
-**URI Pattern:** `jules://sessions/{sessionId}/activities`
-
-**MIME Type:** `application/json`
-
-#### Response Format
-
-```json
-{
-  "sessionId": "abc123",
-  "count": 3,
-  "activities": [
-    {
-      "type": "PLAN_GENERATED",
-      "timestamp": "2025-01-15T10:04:00Z",
-      "planGenerated": { ... }
-    }
-  ]
-}
-```
-
-**Usage:** Audit detailed internal events of a session.
-
----
-
 ### jules://sessions/{id}/full
 
 **Description:** Complete session details including plan and activities
@@ -98,7 +77,7 @@ Resources are read-only data that provide context to the AI assistant.
 
 **MIME Type:** `application/json`
 
-#### Response Format
+**Response Format:**
 
 ```json
 {
@@ -135,35 +114,13 @@ Resources are read-only data that provide context to the AI assistant.
 
 ---
 
-### jules://sessions/{id}/diff
-
-**Description:** unified diff of proposed changes for a specific session
-
-**URI Pattern:** `jules://sessions/{sessionId}/diff`
-
-**MIME Type:** `text/plain`
-
-#### Response Format
-
-```text
---- src/api.ts
-+++ src/api.ts
-@@ -10,5 +10,6 @@
-- export const API_URL = "https://jules.googleapis.com/v1alpha";
-+ export const API_URL = process.env.JULES_API_BASE_URL || "https://jules.googleapis.com/v1alpha";
-```
-
-**Usage:** Detailed review of exact code changes proposed by Jules.
-
----
-
 ### jules://schedules
 
 **Description:** All locally-managed scheduled tasks
 
 **MIME Type:** `application/json`
 
-#### Response Format
+**Response Format:**
 
 ```json
 {
@@ -195,7 +152,7 @@ Resources are read-only data that provide context to the AI assistant.
 
 **MIME Type:** `application/json`
 
-#### Response Format
+**Response Format:**
 
 ```json
 {
@@ -224,30 +181,32 @@ Tools are executable functions that perform actions.
 
 **Description:** Creates an immediate Jules coding session
 
-#### Parameters
+**Parameters:**
 
 | Parameter | Type | Required | Default | Description |
-| ----------- | ------ | ---------- | --------- | ------------- |
+|-----------|------|----------|---------|-------------|
 | `prompt` | string | Yes | - | Natural language task instruction |
 | `source` | string | Yes | - | Repository resource name (sources/github/owner/repo) |
 | `branch` | string | No | "main" | Git branch to base changes on |
+
 | `auto_create_pr` | boolean | No | true | Automatically create Pull Request |
 | `require_plan_approval` | boolean | No | false | Pause for manual plan review |
 | `title` | string | No | - | Optional session title |
 
-#### Returns
+**Returns:**
 
 ```json
 {
   "success": true,
   "sessionId": "abc123",
   "state": "PLANNING",
+
   "message": "Session created and executing automatically.",
   "monitorUrl": "https://jules.google/sessions/abc123"
 }
 ```
 
-#### Error Response
+**Error Response:**
 
 ```json
 {
@@ -264,15 +223,15 @@ Tools are executable functions that perform actions.
 
 **Description:** Manage active sessions (approve plans, send feedback)
 
-#### Parameters
+**Parameters:**
 
 | Parameter | Type | Required | Description |
-| ----------- | ------ | ---------- | ------------- |
+|-----------|------|----------|-------------|
 | `session_id` | string | Yes | Session ID to manage |
-| `action` | enum | Yes | "approve_plan", "reject_plan", or "send_message" |
+| `action` | enum | Yes | "approve_plan" or "send_message" |
 | `message` | string | Conditional | Required if action is "send_message" |
 
-#### Returns
+**Returns:**
 
 ```json
 {
@@ -290,16 +249,17 @@ Tools are executable functions that perform actions.
 
 **Description:** Get current status and guidance for next steps
 
-#### Parameters
+**Parameters:**
 
 | Parameter | Type | Required | Description |
-| ----------- | ------ | ---------- | ------------- |
+|-----------|------|----------|-------------|
 | `session_id` | string | Yes | Session ID |
 
-#### Returns
+**Returns:**
 
 ```json
 {
+  "success": true,
   "sessionId": "abc123",
   "title": "Fix auth bug",
   "state": "AWAITING_PLAN_APPROVAL",
@@ -318,13 +278,14 @@ Tools are executable functions that perform actions.
 
 **Description:** Schedule a task to run automatically on a cron schedule
 
-#### Parameters
+**Parameters:**
 
 | Parameter | Type | Required | Default | Description |
-| ----------- | ------ | ---------- | --------- | ------------- |
+|-----------|------|----------|---------|-------------|
 | `task_name` | string | Yes | - | Unique schedule identifier |
 | `cron_expression` | string | Yes | - | Cron format (minute hour day month weekday) |
 | `prompt` | string | Yes | - | Task instruction |
+
 | `source` | string | Yes | - | Repository resource name |
 | `branch` | string | No | "main" | Git branch |
 | `auto_create_pr` | boolean | No | true | Auto-create PRs |
@@ -333,7 +294,7 @@ Tools are executable functions that perform actions.
 
 **Cron Format:** `minute(0-59) hour(0-23) day(1-31) month(1-12) weekday(0-6)`
 
-#### Returns
+**Returns:**
 
 ```json
 {
@@ -355,7 +316,7 @@ Tools are executable functions that perform actions.
 
 **Parameters:** None
 
-#### Returns
+**Returns:**
 
 ```json
 {
@@ -385,13 +346,13 @@ Tools are executable functions that perform actions.
 
 **Description:** Remove a scheduled task
 
-#### Parameters
+**Parameters:**
 
 | Parameter | Type | Required | Description |
-| ----------- | ------ | ---------- | ------------- |
+|-----------|------|----------|-------------|
 | `task_name` | string | Yes | Name of schedule to delete |
 
-#### Returns
+**Returns:**
 
 ```json
 {
@@ -404,56 +365,6 @@ Tools are executable functions that perform actions.
 
 ---
 
-### delete_session
-
-**Description:** Delete or cancel an active Jules session
-
-#### Parameters
-
-| Parameter | Type | Required | Description |
-| ----------- | ------ | ---------- | ------------- |
-| `session_id` | string | Yes | Session ID |
-
-#### Returns
-
-```json
-{
-  "success": true,
-  "message": "Session 'abc123' deleted/canceled successfully"
-}
-```
-
-**Consequential:** Yes (stops execution and removes record)
-
----
-
-### get_source_details
-
-**Description:** Get detailed information about a source repository
-
-#### Parameters
-
-| Parameter | Type | Required | Description |
-| ----------- | ------ | ---------- | ------------- |
-| `source_name` | string | Yes | Source resource name (sources/github/owner/repo) |
-
-#### Returns
-
-```json
-{
-  "success": true,
-  "name": "sources/github/owner/repo",
-  "repository": "owner/repo",
-  "defaultBranch": "main",
-  "url": "https://github.com/owner/repo",
-  "metadata": { ... }
-}
-```
-
-**Consequential:** No (read-only)
-
----
-
 ## Prompts
 
 Prompts are templates that help users leverage Jules effectively.
@@ -462,24 +373,26 @@ Prompts are templates that help users leverage Jules effectively.
 
 **Description:** Guided refactoring workflow with clear goals
 
-#### Arguments
+**Arguments:**
 
 - `repository` (required) - Repository name (owner/repo)
 - `module_path` (required) - Path to file/module
 - `goal` (required) - Refactoring objective
 
-#### Rendered Output
+**Rendered Output:**
 
-```text
+```
 I want to refactor the module at src/auth/login.ts in repository myorg/backend.
 
 Goal: improve performance
 
 Please create a Jules coding task with a detailed prompt that:
 1. Identifies the specific files to modify
+
 2. Explains the refactoring goal clearly
 3. Specifies any patterns or conventions to follow
 4. Includes test requirements
+
 
 Use the create_coding_task tool with source format: sources/github/myorg/backend
 ```
@@ -490,19 +403,20 @@ Use the create_coding_task tool with source format: sources/github/myorg/backend
 
 **Description:** Automated weekly maintenance setup
 
-#### Arguments
+**Arguments:**
 
 - `repository` (required) - Repository name
 - `tasks` (required) - Comma-separated task list
 
-#### Rendered Output
+**Rendered Output:**
 
-```text
+```
 I want to set up weekly automated maintenance for repository myorg/frontend.
 
 Maintenance tasks to include:
 - dependency updates
 - linter fixes
+
 - security audit
 
 Please use the schedule_recurring_task tool with:
@@ -518,7 +432,7 @@ Please use the schedule_recurring_task tool with:
 
 **Description:** Comprehensive security audit task
 
-#### Arguments
+**Arguments:**
 
 - `repository` (required) - Repository name
 
@@ -530,7 +444,7 @@ Please use the schedule_recurring_task tool with:
 
 **Description:** Test failure resolution template
 
-#### Arguments
+**Arguments:**
 
 - `repository` (required)
 - `test_command` (required) - How to run tests
@@ -541,7 +455,7 @@ Please use the schedule_recurring_task tool with:
 
 **Description:** Dependency update with breaking change handling
 
-#### Arguments
+**Arguments:**
 
 - `repository` (required)
 - `package_manager` (required) - npm, yarn, or pnpm
@@ -552,7 +466,7 @@ Please use the schedule_recurring_task tool with:
 
 Understanding session states is crucial for monitoring:
 
-```text
+```
 QUEUED
   ↓
 PLANNING (Jules analyzing code)
@@ -564,10 +478,10 @@ IN_PROGRESS (Jules making changes)
 COMPLETED or FAILED
 ```
 
-### State-Specific Actions
+**State-Specific Actions:**
 
 | State | Recommended Action |
-| ------- | ------------------- |
+|-------|-------------------|
 | `QUEUED` | Wait, no action needed |
 | `PLANNING` | Wait for plan generation |
 | `AWAITING_PLAN_APPROVAL` | Read plan, then approve or send feedback |
@@ -582,7 +496,7 @@ Jules API has usage limits (exact limits not public, likely based on tier):
 - **Concurrent sessions:** Limited (varies by account)
 - **Daily tasks:** Limited (free tier may have lower limits)
 
-### Best Practices
+**Best Practices:**
 
 - Don't create excessive scheduled tasks
 - Monitor usage via `jules://sessions/list`
@@ -593,7 +507,7 @@ Jules API has usage limits (exact limits not public, likely based on tier):
 Common errors and their meanings:
 
 | Error | Cause | Solution |
-| ------- | ------- | ---------- |
+|-------|-------|----------|
 | "JULES_API_KEY environment variable is required" | Missing API key | Set JULES_API_KEY |
 | "Repository not found" | Source not connected or invalid name | Check jules://sources |
 | "Invalid cron expression" | Malformed cron string | Use format: minute hour day month weekday |
@@ -662,56 +576,22 @@ To avoid excessive API calls:
 
 ### Local vs Remote State
 
-#### Remote State (Jules API)
+**Remote State (Jules API):**
 
 - Sessions and their activities
 - Source repository list
 
-#### Local State (MCP Server)
+**Local State (MCP Server):**
 
 - Scheduled tasks
 - Schedule execution history
 
 This hybrid model means schedules are not visible in the Jules web UI (they're local to the MCP server).
 
-## Google Jules REST API Overview
-
-The Jules MCP server acts as an integration layer over the Google Jules REST API (v1alpha). The core API concepts from Google's official documentation include:
-
-### Core API Concepts
-
-The API is structured around three primary resource types:
-
-- **Source:** Represents the codebase Jules will work on (currently supports GitHub repositories). The Jules GitHub app must be installed before a repository can be used as a source.
-- **Session:** A continuous unit of work or "project" initiated with a natural language prompt and a specific source.
-- **Activity:** Individual events within a session, such as the agent generating a plan, a user sending a message, or progress updates.
-
-### Technical Specifications
-
-- **Base URL:** `https://jules.googleapis.com/v1alpha`
-- **Authentication:** Uses API keys passed in the `X-Goog-Api-Key` header. Keys are managed at [jules.google.com/settings](https://jules.google.com/settings).
-- **Resource Naming:** Follows standard Google API hierarchical conventions (e.g., `sources/{sourceId}`, `sessions/{sessionId}`, `sessions/{sessionId}/activities/{activityId}`).
-
-### Common API Operations Supported by this Server
-
-| Task | Method | Endpoint |
-| :--- | :--- | :--- |
-| **List Sources** | `GET` | `/v1alpha/sources` |
-| **Create Session** | `POST` | `/v1alpha/sessions` |
-| **List Sessions** | `GET` | `/v1alpha/sessions` |
-| **Send Message** | `POST` | `/v1alpha/sessions/{id}:sendMessage` |
-| **Approve Plan** | `POST` | `/v1alpha/sessions/{id}:approvePlan` |
-| **List Activities** | `GET` | `/v1alpha/sessions/{id}/activities` |
-
-**Documentation Links:**
-
-- [Google for Developers - Jules API Reference](https://developers.google.com/jules/api/reference/rest)
-- [Jules API Quickstart](https://developers.google.com/jules/docs/quickstart)
-
 ## Version Compatibility
 
 | Component | Version | Notes |
-| ----------- | --------- | ------- |
+|-----------|---------|-------|
 | Jules API | v1alpha | Experimental, may change |
 | MCP Protocol | 2025-03-26 | Streamable HTTP spec |
 | Node.js | >=18.0.0 | Required for fetch API |
@@ -719,8 +599,11 @@ The API is structured around three primary resource types:
 
 ## Additional Resources
 
-- **Jules Quickstart:** <https://jules.google/docs/api/reference/>
-- **Jules API Reference:** <https://developers.google.com/jules/api/reference/rest>
-- **MCP Specification:** <https://modelcontextprotocol.io/docs>
-- **MCP TypeScript SDK:** <https://github.com/modelcontextprotocol/typescript-sdk>
-- **Cron Expression Tester:** <https://crontab.guru>
+- **Jules Quickstart:** https://jules.google/docs/api/reference/
+- **Jules API Reference:** https://developers.google.com/jules/api/reference/rest
+- **MCP Specification:** https://modelcontextprotocol.io/docs
+- **MCP TypeScript SDK:** https://github.com/modelcontextprotocol/typescript-sdk
+- **Cron Expression Tester:** https://crontab.guru
+
+<!-- backlinks -->
+**Up:** [[README]]
