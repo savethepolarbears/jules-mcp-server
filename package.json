@@ -17,8 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
-    "lint:knip": "knip"
+    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#**/node_modules\"",
+    "lint:knip": "knip --exclude types"
   },
   "keywords": [
     "mcp",
@@ -44,8 +44,8 @@
     "eslint": "^10.1.0",
     "globals": "^17.4.0",
     "knip": "^6.1.0",
-    "markdownlint-cli2": "^0.22.0",
-    "tsx": "^4.19.2",
+    "markdownlint-cli2": "^0.23.0",
+    "tsx": "^4.23.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.2",
     "vitest": "^4.1.4"
