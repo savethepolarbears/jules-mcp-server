@@ -10,7 +10,7 @@ This file (`AGENTS.md`) is the canonical source of instruction and context for A
 
 ## Technology Stack & Environment
 
-- **Runtime:** Node.js `>=18.0.0` (Current development engine is v22+).
+- **Runtime:** Node.js `>=20.0.0` (Current development engine is v22+).
 - **Language:** TypeScript `^5.9.3`.
 - **Key Dependencies:**
   - `@modelcontextprotocol/sdk` (`^1.29.0`) - Core protocol library.
