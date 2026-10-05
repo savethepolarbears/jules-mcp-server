@@ -3,183 +3,226 @@
  * Tools allow the LLM to trigger actions (create tasks, approve plans, schedule)
  */
 
-import { z } from 'zod';
-import { randomUUID } from 'crypto';
-import type { JulesClient } from '../api/jules-client.js';
-import type { ScheduleStorage } from '../storage/schedule-store.js';
-import { CronEngine } from '../scheduler/cron-engine.js';
-import type { ScheduledTask } from '../types/schedule.js';
-import type { Session, SessionState } from '../types/jules-api.js';
-import { RepositoryValidator, smartTruncate, containsSecret, RateLimitError, SecurityError, RateLimiter } from '../utils/security.js';
+import { z } from "zod";
+import { randomUUID } from "crypto";
+import type { JulesClient } from "../api/jules-client.js";
+import type { ScheduleStorage } from "../storage/schedule-store.js";
+import { CronEngine } from "../scheduler/cron-engine.js";
+import type { ScheduledTask } from "../types/schedule.js";
+import type { Session, SessionState } from "../types/jules-api.js";
+import {
+  RepositoryValidator,
+  smartTruncate,
+  containsSecret,
+  RateLimitError,
+  SecurityError,
+  RateLimiter,
+  extractBranchName,
+} from "../utils/security.js";
 
 // Input validation schemas
 export const CreateTaskSchema = z.object({
   prompt: z
     .string()
-    .min(10, 'Prompt must be at least 10 characters')
-    .max(10000, 'Prompt must not exceed 10,000 characters')
-    .refine((val) => val.trim().length > 0, 'Prompt cannot be empty or whitespace only')
-    .refine((val) => !containsSecret(val), 'Prompt contains potential secrets (e.g., API keys). Please remove them.')
+    .min(10, "Prompt must be at least 10 characters")
+    .max(10000, "Prompt must not exceed 10,000 characters")
+    .refine(
+      (val) => val.trim().length > 0,
+      "Prompt cannot be empty or whitespace only",
+    )
+    .refine(
+      (val) => !containsSecret(val),
+      "Prompt contains potential secrets (e.g., API keys). Please remove them.",
+    )
     .describe(
-      'Natural language instruction for the coding task. Be specific about files, goals, and constraints.'
+      "Natural language instruction for the coding task. Be specific about files, goals, and constraints.",
     ),
   source: z
     .string()
     .regex(
       /^sources\/github\/[\w-]+\/[\w-]+$/,
-      'Source must be in format sources/github/owner/repo'
+      "Source must be in format sources/github/owner/repo",
     )
     .describe(
-      'Repository resource name (format: sources/github/owner/repo). Check jules://sources resource first.'
+      "Repository resource name (format: sources/github/owner/repo). Check jules://sources resource first.",
     ),
   branch: z
     .string()
-    .regex(/^[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*$/, 'Branch name contains invalid characters')
-    .max(255, 'Branch name too long')
-    .default('main')
-    .describe('Git branch to base changes on'),
+    .regex(
+      /^[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*$/,
+      "Branch name contains invalid characters",
+    )
+    .max(255, "Branch name too long")
+    .default("main")
+    .describe("Git branch to base changes on"),
   auto_create_pr: z
     .boolean()
     .default(true)
-    .describe('If true, automatically creates a Pull Request upon completion'),
+    .describe("If true, automatically creates a Pull Request upon completion"),
   require_plan_approval: z
     .boolean()
     .default(false)
     .describe(
-      'If true, pauses at AWAITING_PLAN_APPROVAL state for manual review'
+      "If true, pauses at AWAITING_PLAN_APPROVAL state for manual review",
     ),
   title: z
     .string()
-    .max(200, 'Title must not exceed 200 characters')
+    .max(200, "Title must not exceed 200 characters")
     .optional()
-    .describe('Optional human-readable session title'),
+    .describe("Optional human-readable session title"),
 });
 
 export const ManageSessionSchema = z.object({
   session_id: z
     .string()
-    .regex(/^[\w-]+$/, 'Session ID contains invalid characters')
-    .describe('The ID of the session to manage'),
+    .regex(/^[\w-]+$/, "Session ID contains invalid characters")
+    .describe("The ID of the session to manage"),
   action: z
-    .enum(['approve_plan', 'send_message', 'reject_plan'])
-    .describe('Action to perform on the session'),
+    .enum(["approve_plan", "send_message", "reject_plan"])
+    .describe("Action to perform on the session"),
   message: z
     .string()
-    .min(1, 'Message cannot be empty')
-    .max(5000, 'Message must not exceed 5,000 characters')
-    .refine((val) => !containsSecret(val), 'Message contains potential secrets. Please remove them.')
+    .min(1, "Message cannot be empty")
+    .max(5000, "Message must not exceed 5,000 characters")
+    .refine(
+      (val) => !containsSecret(val),
+      "Message contains potential secrets. Please remove them.",
+    )
     .optional()
-    .describe('Message content (required for send_message action)'),
+    .describe("Message content (required for send_message action)"),
 });
 
 export const CreateRepolessTaskSchema = z.object({
   prompt: z
     .string()
-    .min(10, 'Prompt must be at least 10 characters')
-    .max(10000, 'Prompt must not exceed 10,000 characters')
-    .refine((val) => val.trim().length > 0, 'Prompt cannot be empty or whitespace only')
-    .refine((val) => !containsSecret(val), 'Prompt contains potential secrets (e.g., API keys). Please remove them.')
-    .describe('Natural language instruction for a repoless Jules task.'),
+    .min(10, "Prompt must be at least 10 characters")
+    .max(10000, "Prompt must not exceed 10,000 characters")
+    .refine(
+      (val) => val.trim().length > 0,
+      "Prompt cannot be empty or whitespace only",
+    )
+    .refine(
+      (val) => !containsSecret(val),
+      "Prompt contains potential secrets (e.g., API keys). Please remove them.",
+    )
+    .describe("Natural language instruction for a repoless Jules task."),
   title: z
     .string()
-    .max(200, 'Title must not exceed 200 characters')
+    .max(200, "Title must not exceed 200 characters")
     .optional()
-    .describe('Optional human-readable session title'),
+    .describe("Optional human-readable session title"),
 });
 
 const waitTargetStateSchema = z.enum([
-  'COMPLETED',
-  'FAILED',
-  'CANCELED',
-  'AWAITING_PLAN_APPROVAL',
-  'AWAITING_USER_FEEDBACK',
+  "COMPLETED",
+  "FAILED",
+  "CANCELED",
+  "AWAITING_PLAN_APPROVAL",
+  "AWAITING_USER_FEEDBACK",
 ]);
 
 export const WaitForSessionSchema = z.object({
   session_id: z
     .string()
-    .regex(/^[\w-]+$/, 'Session ID contains invalid characters')
-    .describe('The ID of the session to wait for'),
+    .regex(/^[\w-]+$/, "Session ID contains invalid characters")
+    .describe("The ID of the session to wait for"),
   timeout_seconds: z
     .number()
-    .min(30, 'timeout_seconds must be at least 30')
-    .max(1800, 'timeout_seconds must not exceed 1800')
+    .min(30, "timeout_seconds must be at least 30")
+    .max(1800, "timeout_seconds must not exceed 1800")
     .default(300)
-    .describe('Maximum time to wait before timing out'),
+    .describe("Maximum time to wait before timing out"),
   poll_interval_seconds: z
     .number()
-    .min(5, 'poll_interval_seconds must be at least 5')
-    .max(60, 'poll_interval_seconds must not exceed 60')
+    .min(5, "poll_interval_seconds must be at least 5")
+    .max(60, "poll_interval_seconds must not exceed 60")
     .default(10)
-    .describe('Polling interval while waiting for the target state'),
+    .describe("Polling interval while waiting for the target state"),
   target_states: z
     .array(waitTargetStateSchema)
-    .default(['COMPLETED', 'FAILED', 'CANCELED'])
-    .describe('States that should stop the polling loop'),
+    .default(["COMPLETED", "FAILED", "CANCELED"])
+    .describe("States that should stop the polling loop"),
 });
 
 export const GetActivitiesSinceSchema = z.object({
   session_id: z
     .string()
-    .regex(/^[\w-]+$/, 'Session ID contains invalid characters')
-    .describe('The ID of the session to inspect'),
+    .regex(/^[\w-]+$/, "Session ID contains invalid characters")
+    .describe("The ID of the session to inspect"),
   since: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/, 'since must be a valid UTC ISO 8601 timestamp')
-    .describe('ISO 8601 timestamp used as the lower bound'),
+    .regex(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/,
+      "since must be a valid UTC ISO 8601 timestamp",
+    )
+    .describe("ISO 8601 timestamp used as the lower bound"),
   page_size: z
     .number()
-    .min(1, 'page_size must be at least 1')
-    .max(200, 'page_size must not exceed 200')
+    .min(1, "page_size must be at least 1")
+    .max(200, "page_size must not exceed 200")
     .default(50)
     .optional()
-    .describe('Maximum number of activities to return'),
+    .describe("Maximum number of activities to return"),
 });
 
 export const GetSessionStatusSchema = z.object({
-  session_id: z.string().regex(/^[\w-]+$/, 'Session ID contains invalid characters').describe('The ID of the session to check'),
+  session_id: z
+    .string()
+    .regex(/^[\w-]+$/, "Session ID contains invalid characters")
+    .describe("The ID of the session to check"),
 });
 
 export const ScheduleTaskSchema = z.object({
   task_name: z
     .string()
-    .min(1, 'Task name cannot be empty')
-    .max(100, 'Task name must not exceed 100 characters')
-    .regex(/^[\w\s-]+$/, 'Task name can only contain letters, numbers, spaces, hyphens, and underscores')
-    .describe('Unique name for this schedule (e.g., "Weekly Dependency Update")'),
+    .min(1, "Task name cannot be empty")
+    .max(100, "Task name must not exceed 100 characters")
+    .regex(
+      /^[\w\s-]+$/,
+      "Task name can only contain letters, numbers, spaces, hyphens, and underscores",
+    )
+    .describe(
+      'Unique name for this schedule (e.g., "Weekly Dependency Update")',
+    ),
   cron_expression: z
     .string()
-    .regex(/^[\d\s*,/-]+$/, 'Cron expression contains invalid characters')
+    .regex(/^[\d\s*,/-]+$/, "Cron expression contains invalid characters")
     .describe(
-      'Standard cron expression (e.g., "0 9 * * 1" for Mondays at 9 AM). Format: minute hour day month weekday'
+      'Standard cron expression (e.g., "0 9 * * 1" for Mondays at 9 AM). Format: minute hour day month weekday',
     ),
   prompt: z
     .string()
-    .min(10, 'Prompt must be at least 10 characters')
-    .max(10000, 'Prompt must not exceed 10,000 characters')
-    .refine((val) => !containsSecret(val), 'Prompt contains potential secrets (e.g., API keys). Please remove them.')
-    .describe('The coding task instruction to execute'),
+    .min(10, "Prompt must be at least 10 characters")
+    .max(10000, "Prompt must not exceed 10,000 characters")
+    .refine(
+      (val) => !containsSecret(val),
+      "Prompt contains potential secrets (e.g., API keys). Please remove them.",
+    )
+    .describe("The coding task instruction to execute"),
   source: z
     .string()
     .regex(
       /^sources\/github\/[\w-]+\/[\w-]+$/,
-      'Source must be in format sources/github/owner/repo'
+      "Source must be in format sources/github/owner/repo",
     )
-    .describe('Repository resource name (sources/github/owner/repo)'),
+    .describe("Repository resource name (sources/github/owner/repo)"),
   branch: z
     .string()
-    .regex(/^[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*$/, 'Branch name contains invalid characters')
-    .max(255, 'Branch name too long')
-    .default('main')
-    .describe('Git branch to target'),
+    .regex(
+      /^[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*$/,
+      "Branch name contains invalid characters",
+    )
+    .max(255, "Branch name too long")
+    .default("main")
+    .describe("Git branch to target"),
   auto_create_pr: z
     .boolean()
     .default(true)
-    .describe('Whether to auto-create PRs'),
+    .describe("Whether to auto-create PRs"),
   require_plan_approval: z
     .boolean()
     .default(false)
-    .describe('Whether to require manual plan approval'),
+    .describe("Whether to require manual plan approval"),
   timezone: z
     .string()
     .optional()
@@ -187,11 +230,11 @@ export const ScheduleTaskSchema = z.object({
 });
 
 export const DeleteScheduleSchema = z.object({
-  task_name: z.string().describe('Name of the scheduled task to delete'),
+  task_name: z.string().describe("Name of the scheduled task to delete"),
 });
 
 export const DeleteSessionSchema = z.object({
-  session_id: z.string().describe('The ID of the session to delete or cancel'),
+  session_id: z.string().describe("The ID of the session to delete or cancel"),
 });
 
 export const GetSourceDetailsSchema = z.object({
@@ -199,9 +242,11 @@ export const GetSourceDetailsSchema = z.object({
     .string()
     .regex(
       /^sources\/github\/[\w-]+\/[\w-]+$/,
-      'Source name must be in format sources/github/owner/repo'
+      "Source name must be in format sources/github/owner/repo",
     )
-    .describe('The resource name of the source (e.g., sources/github/owner/repo)'),
+    .describe(
+      "The resource name of the source (e.g., sources/github/owner/repo)",
+    ),
 });
 
 /**
@@ -220,7 +265,7 @@ export class JulesTools {
   constructor(
     private readonly client: JulesClient,
     private readonly storage: ScheduleStorage,
-    private readonly scheduler: CronEngine
+    private readonly scheduler: CronEngine,
   ) {
     // Rate limiting applies only to task creation (write operations). Read/poll operations are intentionally exempt.
     this.rateLimiter = new RateLimiter(10, 60000);
@@ -241,7 +286,8 @@ export class JulesTools {
    * @returns Pull request URL when available.
    */
   private getPullRequestUrl(session: Session): string | undefined {
-    return session.outputs?.find((output) => output.pullRequest?.url)?.pullRequest?.url;
+    return session.outputs?.find((output) => output.pullRequest?.url)
+      ?.pullRequest?.url;
   }
 
   /**
@@ -250,7 +296,7 @@ export class JulesTools {
    * @returns Repository resource name or a repoless label.
    */
   private getRepositoryLabel(session: Session): string {
-    return session.sourceContext?.source || 'repoless';
+    return session.sourceContext?.source || "repoless";
   }
 
   /**
@@ -275,24 +321,25 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string representing the structured result or error.
    */
   private async executeWithErrorHandling<T>(
-    operation: () => Promise<T>
+    operation: () => Promise<T>,
   ): Promise<string> {
     try {
       const result = await operation();
 
       return JSON.stringify(result);
     } catch (error) {
-      const isPassthrough = 
+      const isPassthrough =
         error instanceof z.ZodError ||
         error instanceof SecurityError ||
         error instanceof RateLimitError;
 
-      const logMsg = error instanceof Error ? error.message : 'Unknown error';
+      const logMsg = error instanceof Error ? error.message : "Unknown error";
       console.error(`Tool execution error: ${logMsg}`);
 
-      const errorMsg = isPassthrough && error instanceof Error
-        ? error.message
-        : 'An internal error occurred. Please check server logs.';
+      const errorMsg =
+        isPassthrough && error instanceof Error
+          ? error.message
+          : "An internal error occurred. Please check server logs.";
 
       return JSON.stringify({
         success: false,
@@ -309,11 +356,13 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string representing the created session details, including its ID and status.
    */
   async createCodingTask(
-    args: z.infer<typeof CreateTaskSchema>
+    args: z.infer<typeof CreateTaskSchema>,
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       if (!this.rateLimiter.isAllowed()) {
-        throw new RateLimitError('Rate limit exceeded. Please wait before creating more tasks.');
+        throw new RateLimitError(
+          "Rate limit exceeded. Please wait before creating more tasks.",
+        );
       }
 
       // SECURITY: Validate repository allowlist
@@ -328,15 +377,15 @@ export class JulesTools {
           },
         },
         automationMode: args.auto_create_pr
-          ? 'AUTO_CREATE_PR'
-          : 'AUTOMATION_MODE_UNSPECIFIED',
+          ? "AUTO_CREATE_PR"
+          : "AUTOMATION_MODE_UNSPECIFIED",
         requirePlanApproval: args.require_plan_approval,
         title: args.title,
       });
 
       const statusMsg = args.require_plan_approval
-        ? 'Session created and waiting for plan approval. Use jules://sessions/{id}/full to review the plan, then call manage_session with action=approve_plan.'
-        : 'Session created and executing automatically.';
+        ? "Session created and waiting for plan approval. Use jules://sessions/{id}/full to review the plan, then call manage_session with action=approve_plan."
+        : "Session created and executing automatically.";
 
       return {
         sessionId: session.id,
@@ -356,11 +405,13 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string representing the created session details.
    */
   async createRepolessTask(
-    args: z.infer<typeof CreateRepolessTaskSchema>
+    args: z.infer<typeof CreateRepolessTaskSchema>,
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       if (!this.rateLimiter.isAllowed()) {
-        throw new RateLimitError('Rate limit exceeded. Please wait before creating more tasks.');
+        throw new RateLimitError(
+          "Rate limit exceeded. Please wait before creating more tasks.",
+        );
       }
 
       const session = await this.client.createSession({
@@ -386,28 +437,28 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string representing the result of the management action.
    */
   async manageSession(
-    args: z.infer<typeof ManageSessionSchema>
+    args: z.infer<typeof ManageSessionSchema>,
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
-      if (args.action === 'approve_plan') {
+      if (args.action === "approve_plan") {
         const session = await this.client.approvePlan(args.session_id);
         return {
-          message: 'Plan approved. Session is now executing.',
+          message: "Plan approved. Session is now executing.",
           newState: session.state,
         };
       }
 
-      if (args.action === 'reject_plan') {
+      if (args.action === "reject_plan") {
         await this.client.rejectPlan(args.session_id);
         return {
-          message: 'Plan rejected. Session has been canceled.',
-          newState: 'CANCELED',
+          message: "Plan rejected. Session has been canceled.",
+          newState: "CANCELED",
         };
       }
 
-      if (args.action === 'send_message') {
+      if (args.action === "send_message") {
         if (!args.message) {
-          throw new Error('Message is required for send_message action');
+          throw new Error("Message is required for send_message action");
         }
 
         const session = await this.client.sendMessage(args.session_id, {
@@ -415,12 +466,12 @@ export class JulesTools {
         });
 
         return {
-          message: 'Feedback sent to session',
+          message: "Feedback sent to session",
           newState: session.state,
         };
       }
 
-      throw new Error('Invalid action');
+      throw new Error("Invalid action");
     });
   }
 
@@ -433,7 +484,7 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string representing the session status.
    */
   async getSessionStatus(
-    args: z.infer<typeof GetSessionStatusSchema>
+    args: z.infer<typeof GetSessionStatusSchema>,
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       const session = await this.client.getSession(args.session_id);
@@ -445,7 +496,7 @@ export class JulesTools {
         prompt: session.prompt,
         repository: this.getRepositoryLabel(session),
         updated: session.updateTime,
-        nextSteps: this.getNextStepsForState(session.state || 'UNKNOWN'),
+        nextSteps: this.getNextStepsForState(session.state || "UNKNOWN"),
       };
     });
   }
@@ -458,7 +509,7 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string representing the final observed session state.
    */
   async waitForSession(
-    args: z.infer<typeof WaitForSessionSchema>
+    args: z.infer<typeof WaitForSessionSchema>,
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       const startedAt = Date.now();
@@ -483,7 +534,7 @@ export class JulesTools {
 
         if (Date.now() - startedAt >= timeoutMs) {
           throw new Error(
-            `Timed out waiting for session "${args.session_id}" after ${elapsedSeconds} seconds`
+            `Timed out waiting for session "${args.session_id}" after ${elapsedSeconds} seconds`,
           );
         }
 
@@ -500,20 +551,21 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string containing recent activities.
    */
   async getActivitiesSince(
-    args: z.infer<typeof GetActivitiesSinceSchema>
+    args: z.infer<typeof GetActivitiesSinceSchema>,
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       const response = await this.client.listActivitiesSince(
         args.session_id,
         args.since,
-        args.page_size ?? 50
+        args.page_size ?? 50,
       );
 
+      const activities = response.activities || [];
       return {
         sessionId: args.session_id,
         since: args.since,
-        count: response.activities.length,
-        activities: response.activities,
+        count: activities.length,
+        activities,
       };
     });
   }
@@ -527,13 +579,13 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string representing the scheduling result, including the task ID and next run time.
    */
   async scheduleRecurringTask(
-    args: z.infer<typeof ScheduleTaskSchema>
+    args: z.infer<typeof ScheduleTaskSchema>,
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       // Validate cron expression
       if (!CronEngine.validateCronExpression(args.cron_expression)) {
         throw new Error(
-          `Invalid cron expression: ${args.cron_expression}. Format: minute hour day month weekday`
+          `Invalid cron expression: ${args.cron_expression}. Format: minute hour day month weekday`,
         );
       }
 
@@ -541,7 +593,7 @@ export class JulesTools {
       const existing = await this.storage.getTaskByName(args.task_name);
       if (existing) {
         throw new Error(
-          `A schedule named "${args.task_name}" already exists. Use delete_schedule first or choose a different name.`
+          `A schedule named "${args.task_name}" already exists. Use delete_schedule first or choose a different name.`,
         );
       }
 
@@ -558,8 +610,8 @@ export class JulesTools {
           source: args.source,
           branch: args.branch,
           automationMode: args.auto_create_pr
-            ? 'AUTO_CREATE_PR'
-            : 'AUTOMATION_MODE_UNSPECIFIED',
+            ? "AUTO_CREATE_PR"
+            : "AUTOMATION_MODE_UNSPECIFIED",
           requirePlanApproval: args.require_plan_approval,
         },
         timezone: args.timezone,
@@ -577,7 +629,7 @@ export class JulesTools {
         message: `Task "${args.task_name}" scheduled successfully`,
         scheduleId: task.id,
         cron: args.cron_expression,
-        nextExecution: nextRun?.toISOString() || 'Unknown',
+        nextExecution: nextRun?.toISOString() || "Unknown",
       };
     });
   }
@@ -601,8 +653,8 @@ export class JulesTools {
           enabled: task.enabled,
           repository: task.taskPayload.source,
           prompt: smartTruncate(task.taskPayload.prompt, 60),
-          nextRun: nextRun?.toISOString() || 'Not scheduled',
-          lastRun: task.lastRun || 'Never',
+          nextRun: nextRun?.toISOString() || "Not scheduled",
+          lastRun: task.lastRun || "Never",
           lastSessionId: task.lastSessionId,
         };
       });
@@ -622,7 +674,7 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string confirming the deletion result.
    */
   async deleteSchedule(
-    args: z.infer<typeof DeleteScheduleSchema>
+    args: z.infer<typeof DeleteScheduleSchema>,
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       const task = await this.storage.getTaskByName(args.task_name);
@@ -651,7 +703,7 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string confirming the deletion.
    */
   async deleteSession(
-    args: z.infer<typeof DeleteSessionSchema>
+    args: z.infer<typeof DeleteSessionSchema>,
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       const [session] = await Promise.all([
@@ -659,15 +711,16 @@ export class JulesTools {
         this.client.deleteSession(args.session_id),
       ]);
       const activeStates: SessionState[] = [
-        'QUEUED',
-        'PLANNING',
-        'IN_PROGRESS',
-        'AWAITING_PLAN_APPROVAL',
-        'AWAITING_USER_FEEDBACK',
+        "QUEUED",
+        "PLANNING",
+        "IN_PROGRESS",
+        "AWAITING_PLAN_APPROVAL",
+        "AWAITING_USER_FEEDBACK",
       ];
-      const action = session.state && activeStates.includes(session.state)
-        ? 'canceled'
-        : 'deleted';
+      const action =
+        session.state && activeStates.includes(session.state)
+          ? "canceled"
+          : "deleted";
       return {
         message: `Session "${args.session_id}" ${action} successfully`,
       };
@@ -682,7 +735,7 @@ export class JulesTools {
    * @returns {Promise<string>} A JSON string representing the source details.
    */
   async getSourceDetails(
-    args: z.infer<typeof GetSourceDetailsSchema>
+    args: z.infer<typeof GetSourceDetailsSchema>,
   ): Promise<string> {
     return this.executeWithErrorHandling(async () => {
       const source = await this.client.getSource(args.source_name);
@@ -690,8 +743,8 @@ export class JulesTools {
         name: source.name,
         repository: source.githubRepo
           ? `${source.githubRepo.owner}/${source.githubRepo.repo}`
-          : 'Unknown',
-        defaultBranch: source.githubRepo?.defaultBranch || 'main',
+          : "Unknown",
+        defaultBranch: extractBranchName(source.githubRepo?.defaultBranch),
         url: source.githubRepo?.htmlUrl,
         metadata: source.githubRepo,
       };
@@ -707,23 +760,22 @@ export class JulesTools {
    */
   private getNextStepsForState(state: string): string {
     const stateGuide: Record<string, string> = {
-      QUEUED: 'Session is queued. Wait for it to start planning.',
-      PLANNING: 'Jules is generating a plan. Wait for plan completion.',
+      QUEUED: "Session is queued. Wait for it to start planning.",
+      PLANNING: "Jules is generating a plan. Wait for plan completion.",
       AWAITING_PLAN_APPROVAL:
-        'Plan is ready. Read jules://sessions/{id}/full to review the plan, then call manage_session with action=approve_plan to proceed.',
+        "Plan is ready. Read jules://sessions/{id}/full to review the plan, then call manage_session with action=approve_plan to proceed.",
       AWAITING_USER_FEEDBACK:
-        'Jules asked a clarifying question. Read jules://sessions/{id}/full to see the agentMessaged activity, then call manage_session with action=send_message to answer it.',
+        "Jules asked a clarifying question. Read jules://sessions/{id}/full to see the agentMessaged activity, then call manage_session with action=send_message to answer it.",
       IN_PROGRESS:
-        'Session is executing. Monitor progress via jules://sessions/{id}/full.',
+        "Session is executing. Monitor progress via jules://sessions/{id}/full.",
       PAUSED:
-        'Session is paused. Use manage_session with action=send_message to resume.',
+        "Session is paused. Use manage_session with action=send_message to resume.",
       COMPLETED:
-        'Session completed. Check the final activity for Pull Request URL or artifacts.',
-      FAILED:
-        'Session failed. Review activities to diagnose the issue.',
-      CANCELED: 'Session was canceled.',
+        "Session completed. Check the final activity for Pull Request URL or artifacts.",
+      FAILED: "Session failed. Review activities to diagnose the issue.",
+      CANCELED: "Session was canceled.",
     };
 
-    return stateGuide[state] || 'Unknown state. Check session activities.';
+    return stateGuide[state] || "Unknown state. Check session activities.";
   }
 }

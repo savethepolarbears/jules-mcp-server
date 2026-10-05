@@ -4,11 +4,21 @@
  */
 
 /**
+ * Branch metadata for a GitHub repository.
+ */
+interface GitHubBranch {
+  /** The name of the GitHub branch. */
+  displayName: string;
+}
+
+/**
  * Represents a source repository for Jules.
  */
 export interface Source {
   /** Resource name format: sources/github/{owner}/{repo} */
   name: string;
+  /** Unique source identifier. */
+  id?: string;
   /** GitHub repository details */
   githubRepo?: {
     /** The owner of the GitHub repository. */
@@ -16,9 +26,13 @@ export interface Source {
     /** The name of the GitHub repository. */
     repo: string;
     /** The HTML URL of the GitHub repository. */
-    htmlUrl: string;
+    htmlUrl?: string;
+    /** Whether this repo is private */
+    isPrivate?: boolean;
     /** The default branch of the GitHub repository. */
-    defaultBranch: string;
+    defaultBranch?: GitHubBranch | string;
+    /** Active branches that Jules can target */
+    branches?: GitHubBranch[];
   };
 }
 
@@ -27,7 +41,7 @@ export interface Source {
  */
 export interface ListSourcesResponse {
   /** A list of source repositories. */
-  sources: Source[];
+  sources?: Source[];
   /** A token for the next page of results. */
   nextPageToken?: string;
 }
@@ -43,7 +57,7 @@ interface GitHubRepoContext {
 /**
  * Context for a source repository.
  */
-export interface SourceContext {
+interface SourceContext {
   /** Resource name of the source */
   source: string;
   /** GitHub repository context details. */
@@ -55,9 +69,7 @@ export interface SourceContext {
  * - `AUTO_CREATE_PR`: Automatically create a pull request.
  * - `AUTOMATION_MODE_UNSPECIFIED`: Unspecified automation mode.
  */
-export type AutomationMode =
-  | 'AUTO_CREATE_PR'
-  | 'AUTOMATION_MODE_UNSPECIFIED';
+type AutomationMode = "AUTO_CREATE_PR" | "AUTOMATION_MODE_UNSPECIFIED";
 
 /**
  * State of a session.
@@ -71,16 +83,16 @@ export type AutomationMode =
  * - `CANCELED`: Session was canceled.
  */
 export type SessionState =
-  | 'SESSION_STATE_UNSPECIFIED'
-  | 'QUEUED'
-  | 'PLANNING'
-  | 'AWAITING_PLAN_APPROVAL'
-  | 'AWAITING_USER_FEEDBACK'
-  | 'IN_PROGRESS'
-  | 'PAUSED'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'CANCELED';
+  | "SESSION_STATE_UNSPECIFIED"
+  | "QUEUED"
+  | "PLANNING"
+  | "AWAITING_PLAN_APPROVAL"
+  | "AWAITING_USER_FEEDBACK"
+  | "IN_PROGRESS"
+  | "PAUSED"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELED";
 
 /**
  * Represents a Jules session.
@@ -143,7 +155,7 @@ export interface CreateSessionRequest {
  */
 export interface ListSessionsResponse {
   /** A list of sessions. */
-  sessions: Session[];
+  sessions?: Session[];
   /** A token for the next page of results. */
   nextPageToken?: string;
 }
@@ -154,16 +166,18 @@ export interface ListSessionsResponse {
  * - `PROGRESS_UPDATED`: Progress was updated.
  * - `SESSION_COMPLETED`: Session was completed.
  * - `MESSAGE_SENT`: A message was sent.
+ * - `AGENT_MESSAGED`: Agent messaged the user.
+ * - `PLAN_APPROVED`: A plan was approved.
  * - `ACTIVITY_TYPE_UNSPECIFIED`: Unspecified activity type.
  */
-export type ActivityType =
-  | 'PLAN_GENERATED'
-  | 'PROGRESS_UPDATED'
-  | 'SESSION_COMPLETED'
-  | 'MESSAGE_SENT'
-  | 'AGENT_MESSAGED'
-  | 'PLAN_APPROVED'
-  | 'ACTIVITY_TYPE_UNSPECIFIED';
+type ActivityType =
+  | "PLAN_GENERATED"
+  | "PROGRESS_UPDATED"
+  | "SESSION_COMPLETED"
+  | "MESSAGE_SENT"
+  | "AGENT_MESSAGED"
+  | "PLAN_APPROVED"
+  | "ACTIVITY_TYPE_UNSPECIFIED";
 
 /**
  * Represents a set of changes in a plan.
@@ -190,26 +204,49 @@ export interface ChangeSet {
 export interface Activity {
   /** Resource name format: sessions/{session_id}/activities/{activity_id} */
   name: string;
-  /** Activity type */
-  type: ActivityType;
+  /** Unique activity identifier. */
+  id?: string;
+  /** Activity type (optional in live API v1alpha responses) */
+  type?: ActivityType;
   /** Timestamp when activity occurred */
   timestamp?: string;
+  /** Timestamp used by the live Jules API. */
+  createTime?: string;
+  /** Entity that created the activity. */
+  originator?: string;
+  /** Optional human-readable summary. */
+  description?: string;
   /** Activity-specific payload */
   planGenerated?: {
-    /** The generated plan description. */
-    plan: string;
+    /** The generated plan description or plan object. */
+    plan:
+      | string
+      | {
+          id?: string;
+          steps?: {
+            id?: string;
+            title: string;
+            description?: string;
+            index?: number;
+          }[];
+          createTime?: string;
+        };
     /** The set of changes proposed in the plan. */
     changeSet?: ChangeSet;
   };
   progressUpdated?: {
     /** The progress message. */
-    message: string;
+    message?: string;
     /** The completion percentage. */
     percentage?: number;
+    /** Short title emitted by the live Jules API. */
+    title?: string;
+    /** Longer description emitted by the live Jules API. */
+    description?: string;
   };
   sessionCompleted?: {
     /** Whether the session completed successfully. */
-    success: boolean;
+    success?: boolean;
     /** A message describing the completion. */
     message?: string;
     /** The URL of the created pull request, if any. */
@@ -217,19 +254,31 @@ export interface Activity {
     /** The final set of changes for the session, if available. */
     changeSet?: ChangeSet;
   };
+  sessionFailed?: {
+    /** A message describing why the session failed. */
+    reason?: string;
+  };
   messageSent?: {
     /** The message content. */
     prompt: string;
     /** The sender of the message. */
-    sender: 'USER' | 'AGENT';
+    sender: "USER" | "AGENT";
+  };
+  userMessaged?: {
+    /** The message content emitted by the current Jules API. */
+    userMessage: string;
   };
   planApproved?: {
     /** When the plan was approved. */
-    approvedAt: string;
+    approvedAt?: string;
+    /** Plan identifier emitted by the current Jules API. */
+    planId?: string;
   };
   agentMessaged?: {
     /** Agent-authored message requiring user attention. */
-    message: string;
+    message?: string;
+    /** Agent-authored message emitted by the current Jules API. */
+    agentMessage?: string;
   };
   media?: {
     /** Optional media URL. */
@@ -246,7 +295,7 @@ export interface Activity {
  */
 export interface ListActivitiesResponse {
   /** A list of activities. */
-  activities: Activity[];
+  activities?: Activity[];
   /** A token for the next page of results. */
   nextPageToken?: string;
 }

@@ -3,11 +3,11 @@
  * Resources provide "grounding" - helping the LLM understand the current state
  */
 
-import type { JulesClient } from '../api/jules-client.js';
-import type { ScheduleStorage } from '../storage/schedule-store.js';
-import type { CronEngine } from '../scheduler/cron-engine.js';
-import type { Activity, ChangeSet, Session } from '../types/jules-api.js';
-import { smartTruncate } from '../utils/security.js';
+import type { JulesClient } from "../api/jules-client.js";
+import type { ScheduleStorage } from "../storage/schedule-store.js";
+import type { CronEngine } from "../scheduler/cron-engine.js";
+import type { Activity, ChangeSet, Session } from "../types/jules-api.js";
+import { smartTruncate, extractBranchName } from "../utils/security.js";
 
 /**
  * Manages the exposure of Jules resources via the MCP protocol.
@@ -23,7 +23,7 @@ export class JulesResources {
   constructor(
     private readonly client: JulesClient,
     private readonly storage: ScheduleStorage,
-    private readonly scheduler: CronEngine
+    private readonly scheduler: CronEngine,
   ) {}
 
   /**
@@ -32,7 +32,7 @@ export class JulesResources {
    * @returns Repository resource name or a repoless label.
    */
   private getRepositoryLabel(session: Session): string {
-    return session.sourceContext?.source || 'repoless';
+    return session.sourceContext?.source || "repoless";
   }
 
   /**
@@ -45,8 +45,9 @@ export class JulesResources {
     title?: string;
     description?: string;
   }[] {
-    return (session.outputs || [])
-      .flatMap((output) => (output.pullRequest ? [output.pullRequest] : []));
+    return (session.outputs || []).flatMap((output) =>
+      output.pullRequest ? [output.pullRequest] : [],
+    );
   }
 
   /**
@@ -56,19 +57,24 @@ export class JulesResources {
    */
   private getLatestChangeSet(activities: Activity[]): {
     changeSet?: ChangeSet;
-    activityType?: Activity['type'];
+    activityType?: Activity["type"];
     timestamp?: string;
   } {
     for (let index = activities.length - 1; index >= 0; index -= 1) {
       const activity = activities[index];
       const changeSet =
-        activity.sessionCompleted?.changeSet || activity.planGenerated?.changeSet;
+        activity.sessionCompleted?.changeSet ||
+        activity.planGenerated?.changeSet;
 
       if (changeSet) {
         return {
           changeSet,
-          activityType: activity.type,
-          timestamp: activity.timestamp,
+          activityType:
+            activity.type ||
+            (activity.sessionCompleted
+              ? "SESSION_COMPLETED"
+              : "PLAN_GENERATED"),
+          timestamp: activity.createTime || activity.timestamp,
         };
       }
     }
@@ -85,24 +91,26 @@ export class JulesResources {
    */
   async getSources(): Promise<string> {
     const response = await this.client.listSources();
+    const sources = response.sources || [];
 
-    const formatted = response.sources.map((source) => ({
+    const formatted = sources.map((source) => ({
       name: source.name,
       repository: source.githubRepo
         ? `${source.githubRepo.owner}/${source.githubRepo.repo}`
-        : 'Unknown',
-      defaultBranch: source.githubRepo?.defaultBranch || 'main',
+        : "Unknown",
+      defaultBranch: extractBranchName(source.githubRepo?.defaultBranch),
       url: source.githubRepo?.htmlUrl,
     }));
 
     return JSON.stringify(
       {
-        description: 'Connected GitHub repositories available for Jules tasks. Note: For safe integration from AI agents (OpenClaw/Codex), always use require_plan_approval: true when targeting these repos.',
+        description:
+          "Connected GitHub repositories available for Jules tasks. Note: For safe integration from AI agents (OpenClaw/Codex), always use require_plan_approval: true when targeting these repos.",
         count: formatted.length,
         sources: formatted,
       },
       null,
-      2
+      2,
     );
   }
 
@@ -115,11 +123,12 @@ export class JulesResources {
    */
   async getSessionsList(): Promise<string> {
     const response = await this.client.listSessions(50);
+    const sessions = response.sessions || [];
 
-    const formatted = response.sessions.map((session) => ({
+    const formatted = sessions.map((session) => ({
       id: session.id,
-      title: session.title || 'Untitled Task',
-      state: session.state || 'UNKNOWN',
+      title: session.title || "Untitled Task",
+      state: session.state || "UNKNOWN",
       prompt: smartTruncate(session.prompt, 100),
       repository: this.getRepositoryLabel(session),
       created: session.createTime,
@@ -127,12 +136,13 @@ export class JulesResources {
 
     return JSON.stringify(
       {
-        description: 'Recent Jules sessions (tasks). Be mindful of API quotas when querying session history frequently.',
+        description:
+          "Recent Jules sessions (tasks). Be mindful of API quotas when querying session history frequently.",
         count: formatted.length,
         sessions: formatted,
       },
       null,
-      2
+      2,
     );
   }
 
@@ -145,14 +155,15 @@ export class JulesResources {
    */
   async getSessionActivities(sessionId: string): Promise<string> {
     const response = await this.client.listActivities(sessionId);
+    const activities = response.activities || [];
     return JSON.stringify(
       {
         sessionId,
-        count: response.activities.length,
-        activities: response.activities,
+        count: activities.length,
+        activities,
       },
       null,
-      2
+      2,
     );
   }
 
@@ -171,69 +182,115 @@ export class JulesResources {
       this.client.listActivities(sessionId),
     ]);
 
+    const activities = activitiesResponse.activities || [];
+
     // Format activities for readability
-    const formattedActivities = activitiesResponse.activities.map(
-      (activity) => {
-        const base = {
-          type: activity.type,
-          timestamp: activity.timestamp,
-          media: activity.media,
+    const formattedActivities = activities.map((activity) => {
+      const base = {
+        type:
+          activity.type ||
+          (activity.agentMessaged
+            ? "AGENT_MESSAGED"
+            : activity.userMessaged
+              ? "USER_MESSAGED"
+              : activity.planGenerated
+                ? "PLAN_GENERATED"
+                : activity.progressUpdated
+                  ? "PROGRESS_UPDATED"
+                  : activity.sessionCompleted
+                    ? "SESSION_COMPLETED"
+                    : activity.sessionFailed
+                      ? "SESSION_FAILED"
+                      : activity.planApproved
+                        ? "PLAN_APPROVED"
+                        : "ACTIVITY_TYPE_UNSPECIFIED"),
+        timestamp: activity.createTime || activity.timestamp,
+        media: activity.media,
+      };
+
+      // Add type-specific details
+      if (activity.planGenerated) {
+        const planText =
+          typeof activity.planGenerated.plan === "string"
+            ? activity.planGenerated.plan
+            : activity.planGenerated.plan?.steps
+                ?.map((s) => s.title)
+                .join("\n") || "";
+        return {
+          ...base,
+          plan: planText,
+          changesPreview: activity.planGenerated.changeSet
+            ? `${activity.planGenerated.changeSet.changes?.length || 0} files`
+            : "No changes",
         };
-
-        // Add type-specific details
-        if (activity.planGenerated) {
-          return {
-            ...base,
-            plan: activity.planGenerated.plan,
-            changesPreview: activity.planGenerated.changeSet
-              ? `${activity.planGenerated.changeSet.changes?.length || 0} files`
-              : 'No changes',
-          };
-        }
-
-        if (activity.progressUpdated) {
-          return {
-            ...base,
-            message: activity.progressUpdated.message,
-            percentage: activity.progressUpdated.percentage,
-          };
-        }
-
-        if (activity.sessionCompleted) {
-          return {
-            ...base,
-            success: activity.sessionCompleted.success,
-            message: activity.sessionCompleted.message,
-            pullRequestUrl: activity.sessionCompleted.pullRequestUrl,
-            changeSet: activity.sessionCompleted.changeSet,
-          };
-        }
-
-        if (activity.messageSent) {
-          return {
-            ...base,
-            prompt: activity.messageSent.prompt,
-            sender: activity.messageSent.sender,
-          };
-        }
-
-        if (activity.agentMessaged) {
-          return {
-            ...base,
-            message: activity.agentMessaged.message,
-          };
-        }
-
-        if (activity.planApproved) {
-          return {
-            ...base,
-            approvedAt: activity.planApproved.approvedAt,
-          };
-        }
-
-        return base;
       }
-    );
+
+      if (activity.progressUpdated) {
+        return {
+          ...base,
+          message:
+            activity.progressUpdated.message ||
+            activity.progressUpdated.description ||
+            activity.progressUpdated.title ||
+            "",
+          percentage: activity.progressUpdated.percentage,
+        };
+      }
+
+      if (activity.sessionCompleted) {
+        return {
+          ...base,
+          success: activity.sessionCompleted.success,
+          message: activity.sessionCompleted.message,
+          pullRequestUrl: activity.sessionCompleted.pullRequestUrl,
+          changeSet: activity.sessionCompleted.changeSet,
+        };
+      }
+
+      if (activity.sessionFailed) {
+        return {
+          ...base,
+          reason: activity.sessionFailed.reason,
+        };
+      }
+
+      if (activity.messageSent) {
+        return {
+          ...base,
+          prompt: activity.messageSent.prompt,
+          sender: activity.messageSent.sender,
+        };
+      }
+
+      if (activity.userMessaged) {
+        return {
+          ...base,
+          userMessage: activity.userMessaged.userMessage,
+        };
+      }
+
+      if (activity.agentMessaged) {
+        return {
+          ...base,
+          message:
+            activity.agentMessaged.agentMessage ||
+            activity.agentMessaged.message ||
+            "",
+        };
+      }
+
+      if (activity.planApproved) {
+        return {
+          ...base,
+          approvedAt:
+            activity.planApproved.approvedAt ||
+            activity.createTime ||
+            activity.timestamp,
+        };
+      }
+
+      return base;
+    });
 
     const pullRequests = this.getPullRequests(session);
 
@@ -247,7 +304,7 @@ export class JulesResources {
           url: session.url,
           repository: this.getRepositoryLabel(session),
           branch:
-            session.sourceContext?.githubRepoContext?.startingBranch || 'main',
+            session.sourceContext?.githubRepoContext?.startingBranch || "main",
           automationMode: session.automationMode,
           requirePlanApproval: session.requirePlanApproval,
           created: session.createTime,
@@ -257,7 +314,7 @@ export class JulesResources {
         activities: formattedActivities,
       },
       null,
-      2
+      2,
     );
   }
 
@@ -270,17 +327,17 @@ export class JulesResources {
    */
   async getSessionDiff(sessionId: string): Promise<string> {
     const response = await this.client.listActivities(sessionId);
-    const latest = this.getLatestChangeSet(response.activities);
+    const latest = this.getLatestChangeSet(response.activities || []);
 
     if (!latest.changeSet) {
       return JSON.stringify(
         {
           sessionId,
           message:
-            'No changeSet is available yet. The session may still be in progress or has not produced a diff.',
+            "No changeSet is available yet. The session may still be in progress or has not produced a diff.",
         },
         null,
-        2
+        2,
       );
     }
 
@@ -294,7 +351,7 @@ export class JulesResources {
         changes: latest.changeSet.changes || [],
       },
       null,
-      2
+      2,
     );
   }
 
@@ -317,20 +374,21 @@ export class JulesResources {
         enabled: task.enabled,
         repository: task.taskPayload.source,
         prompt: smartTruncate(task.taskPayload.prompt, 80),
-        nextRun: nextRun?.toISOString() || 'Not scheduled',
-        lastRun: task.lastRun || 'Never',
+        nextRun: nextRun?.toISOString() || "Not scheduled",
+        lastRun: task.lastRun || "Never",
         lastSessionId: task.lastSessionId,
       };
     });
 
     return JSON.stringify(
       {
-        description: 'Locally-managed scheduled Jules tasks. Ensure new schedules are quota-aware (at most once per hour).',
+        description:
+          "Locally-managed scheduled Jules tasks. Ensure new schedules are quota-aware (at most once per hour).",
         count: formatted.length,
         schedules: formatted,
       },
       null,
-      2
+      2,
     );
   }
 
@@ -348,7 +406,7 @@ export class JulesResources {
       .filter((task) => task.lastRun)
       .sort(
         (a, b) =>
-          new Date(b.lastRun!).getTime() - new Date(a.lastRun!).getTime()
+          new Date(b.lastRun!).getTime() - new Date(a.lastRun!).getTime(),
       )
       .map((task) => ({
         taskName: task.name,
@@ -359,12 +417,12 @@ export class JulesResources {
 
     return JSON.stringify(
       {
-        description: 'Execution history of scheduled tasks',
+        description: "Execution history of scheduled tasks",
         count: history.length,
         history,
       },
       null,
-      2
+      2,
     );
   }
 }

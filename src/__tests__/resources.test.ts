@@ -204,4 +204,73 @@ describe('JulesResources', () => {
     expect(result.activities[0].changesPreview).toBe('0 files');
     expect(result.activities[1].changesPreview).toBe('No changes');
   });
+
+  it('getSources handles empty responses without crashing', async () => {
+    (clientMock.listSources as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    const result = JSON.parse(await resources.getSources());
+    expect(result.count).toBe(0);
+    expect(result.sources).toEqual([]);
+  });
+
+  it('getSessionsList handles empty responses without crashing', async () => {
+    (clientMock.listSessions as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    const result = JSON.parse(await resources.getSessionsList());
+    expect(result.count).toBe(0);
+    expect(result.sessions).toEqual([]);
+  });
+
+  it('getSessionActivities handles empty activities in response', async () => {
+    (clientMock.listActivities as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    const result = JSON.parse(await resources.getSessionActivities('sess-empty'));
+    expect(result.count).toBe(0);
+    expect(result.activities).toEqual([]);
+  });
+
+  it('getSources extracts displayName from defaultBranch object', async () => {
+    (clientMock.listSources as ReturnType<typeof vi.fn>).mockResolvedValue({
+      sources: [
+        {
+          name: 'sources/github/owner/repo',
+          githubRepo: {
+            owner: 'owner',
+            repo: 'repo',
+            defaultBranch: { displayName: 'develop' },
+            htmlUrl: 'https://github.com/owner/repo',
+          },
+        },
+      ],
+    });
+    const result = JSON.parse(await resources.getSources());
+    expect(result.sources[0].defaultBranch).toBe('develop');
+  });
+
+  it('getSessionFull handles v1alpha activities with createTime, agentMessage, and missing type', async () => {
+    (clientMock.getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'sess-v1alpha',
+      state: 'COMPLETED',
+    });
+    (clientMock.listActivities as ReturnType<typeof vi.fn>).mockResolvedValue({
+      activities: [
+        {
+          name: 'sessions/sess-v1alpha/activities/act-1',
+          createTime: '2026-08-12T18:39:05.760234Z',
+          originator: 'agent',
+          agentMessaged: { agentMessage: 'I have run the project test suite' },
+          id: 'act-1',
+        },
+      ],
+    });
+    const result = JSON.parse(await resources.getSessionFull('sess-v1alpha'));
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities[0].type).toBe('AGENT_MESSAGED');
+    expect(result.activities[0].timestamp).toBe('2026-08-12T18:39:05.760234Z');
+    expect(result.activities[0].message).toBe('I have run the project test suite');
+  });
+
+  it('getSessionDiff handles empty activities response gracefully', async () => {
+    (clientMock.listActivities as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    const result = JSON.parse(await resources.getSessionDiff('sess-empty-diff'));
+    expect(result.sessionId).toBe('sess-empty-diff');
+    expect(result.message).toContain('No changeSet is available yet');
+  });
 });
