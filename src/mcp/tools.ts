@@ -163,6 +163,10 @@ export const GetActivitiesSinceSchema = z.object({
     .default(50)
     .optional()
     .describe("Maximum number of activities to return"),
+  page_token: z
+    .string()
+    .optional()
+    .describe("Optional pagination token to resume fetching from a previous call"),
 });
 
 export const GetSessionStatusSchema = z.object({
@@ -558,6 +562,7 @@ export class JulesTools {
         args.session_id,
         args.since,
         args.page_size ?? 50,
+        args.page_token,
       );
 
       const activities = response.activities || [];
@@ -566,6 +571,7 @@ export class JulesTools {
         since: args.since,
         count: activities.length,
         activities,
+        nextPageToken: response.nextPageToken,
       };
     });
   }

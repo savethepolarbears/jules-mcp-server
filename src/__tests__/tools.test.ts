@@ -712,5 +712,34 @@ describe("JulesTools", () => {
       expect(parsed.count).toBe(0);
       expect(parsed.activities).toEqual([]);
     });
+
+    it("getActivitiesSince passes page_token and returns nextPageToken", async () => {
+      vi.mocked(client.listActivitiesSince).mockResolvedValue({
+        activities: [
+          {
+            type: "PLAN_GENERATED",
+            name: "activities/2",
+            timestamp: "2026-01-02T00:00:00Z",
+          },
+        ],
+        nextPageToken: "next-cursor-token",
+      });
+
+      const result = await tools.getActivitiesSince({
+        session_id: "sess-1",
+        since: "2026-01-01T00:00:00Z",
+        page_size: 10,
+        page_token: "current-cursor-token",
+      });
+      const parsed = JSON.parse(result);
+      expect(parsed.count).toBe(1);
+      expect(parsed.nextPageToken).toBe("next-cursor-token");
+      expect(client.listActivitiesSince).toHaveBeenCalledWith(
+        "sess-1",
+        "2026-01-01T00:00:00Z",
+        10,
+        "current-cursor-token",
+      );
+    });
   });
 });

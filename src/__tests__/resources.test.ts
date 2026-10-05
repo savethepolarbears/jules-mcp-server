@@ -273,4 +273,48 @@ describe('JulesResources', () => {
     expect(result.sessionId).toBe('sess-empty-diff');
     expect(result.message).toContain('No changeSet is available yet');
   });
+
+  it('getSessionFull preserves step descriptions and structuredPlan in planGenerated activities', async () => {
+    (clientMock.getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'sess-plan-detail',
+      state: 'AWAITING_PLAN_APPROVAL',
+    });
+    const structuredPlan = {
+      id: 'plan-101',
+      steps: [
+        {
+          id: 'step-1',
+          index: 1,
+          title: 'Audit API surface',
+          description: 'Inspect live endpoints and check for parameter mismatches.',
+        },
+        {
+          id: 'step-2',
+          index: 2,
+          title: 'Implement unit tests',
+          description: 'Add regression tests in vitest for pagination and error handling.',
+        },
+      ],
+    };
+    (clientMock.listActivities as ReturnType<typeof vi.fn>).mockResolvedValue({
+      activities: [
+        {
+          name: 'sessions/sess-plan-detail/activities/act-plan',
+          createTime: '2026-08-12T19:00:00Z',
+          originator: 'agent',
+          planGenerated: {
+            plan: structuredPlan,
+            changeSet: { changes: [{ path: 'src/api.ts' }] },
+          },
+        },
+      ],
+    });
+    const result = JSON.parse(await resources.getSessionFull('sess-plan-detail'));
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities[0].plan).toContain('1. Audit API surface');
+    expect(result.activities[0].plan).toContain('Inspect live endpoints and check for parameter mismatches.');
+    expect(result.activities[0].plan).toContain('2. Implement unit tests');
+    expect(result.activities[0].plan).toContain('Add regression tests in vitest for pagination and error handling.');
+    expect(result.activities[0].structuredPlan).toEqual(structuredPlan);
+  });
 });

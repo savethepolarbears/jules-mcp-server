@@ -238,6 +238,88 @@ describe("JulesClient Methods", () => {
     expect(requestedUrl).not.toContain("filter=");
   });
 
+  it("listActivitiesSince follows pagination across multiple pages until pageSize matches collected", async () => {
+    const mockFetch = global.fetch as ReturnType<typeof vi.fn>;
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          activities: [
+            {
+              name: "sessions/1/activities/act-old-1",
+              createTime: "2026-08-10T12:00:00Z",
+              originator: "agent",
+            },
+          ],
+          nextPageToken: "token-page-2",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          activities: [
+            {
+              name: "sessions/1/activities/act-new-1",
+              createTime: "2026-08-12T12:00:00Z",
+              originator: "agent",
+            },
+            {
+              name: "sessions/1/activities/act-new-2",
+              createTime: "2026-08-13T12:00:00Z",
+              originator: "agent",
+            },
+          ],
+          nextPageToken: "token-page-3",
+        }),
+      });
+
+    const result = await client.listActivitiesSince(
+      "1",
+      "2026-08-11T00:00:00Z",
+      2,
+    );
+    expect(result.activities).toHaveLength(2);
+    expect(result.activities![0].name).toBe("sessions/1/activities/act-new-1");
+    expect(result.activities![1].name).toBe("sessions/1/activities/act-new-2");
+    expect(result.nextPageToken).toBe("token-page-3");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    const secondUrl = mockFetch.mock.calls[1][0] as string;
+    expect(secondUrl).toContain("pageToken=token-page-2");
+  });
+
+  it("listActivitiesSince starts from provided pageToken", async () => {
+    const mockFetch = global.fetch as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        activities: [
+          {
+            name: "sessions/1/activities/act-from-token",
+            createTime: "2026-08-15T12:00:00Z",
+            originator: "agent",
+          },
+        ],
+      }),
+    });
+
+    const result = await client.listActivitiesSince(
+      "1",
+      "2026-08-11T00:00:00Z",
+      10,
+      "resume-token",
+    );
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities![0].name).toBe("sessions/1/activities/act-from-token");
+    expect(result.nextPageToken).toBeUndefined();
+
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain("pageToken=resume-token");
+  });
+
   it("deleteSession", async () => {
     mockSuccess();
     await expect(client.deleteSession("1")).resolves.toEqual({});

@@ -357,6 +357,10 @@ class JulesMCPServer {
                 description: 'Maximum number of activities to return',
                 default: 50,
               },
+              page_token: {
+                type: 'string',
+                description: 'Optional pagination token to resume fetching',
+              },
             },
             required: ['session_id', 'since'],
           },

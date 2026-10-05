@@ -4,6 +4,7 @@
  */
 
 import type {
+  Activity,
   Source,
   ListSourcesResponse,
   Session,
@@ -376,36 +377,57 @@ export class JulesClient {
 
   /**
    * List activities for a session created after a given timestamp.
-   * Fetches activities from the Jules API and filters client-side by createTime/timestamp,
-   * avoiding unsupported filter query parameters on the v1alpha activities.list endpoint.
+   * Traverses paginated pages from the Jules API while filtering client-side by createTime/timestamp,
+   * collecting matching activities until the requested number of matches (`pageSize`) is collected
+   * or the results are exhausted.
    *
    * @param sessionId - The ID of the session to list activities for.
    * @param since - ISO timestamp boundary.
-   * @param pageSize - The maximum number of activities to return.
-   * @returns A promise that resolves with the filtered activities.
+   * @param pageSize - The maximum number of matching activities to collect and return.
+   * @param pageToken - Optional page token to resume pagination from a previous call.
+   * @returns A promise that resolves with the filtered activities and the next page token if more results remain.
    */
   async listActivitiesSince(
     sessionId: string,
     since: string,
     pageSize = 50,
+    pageToken?: string,
   ): Promise<ListActivitiesResponse> {
-    const response = await this.request<ListActivitiesResponse>(
-      `/sessions/${sessionId}/activities${this.buildQuery({ pageSize })}`,
-    );
-
     const sinceTime = new Date(since).getTime();
-    const activities = (response.activities || []).filter((activity) => {
-      const timeStr = activity.createTime || activity.timestamp;
-      if (!timeStr) return false;
-      const activityTime = new Date(timeStr).getTime();
-      return (
-        !isNaN(activityTime) && !isNaN(sinceTime) && activityTime > sinceTime
+    const collected: Activity[] = [];
+    let currentPageToken: string | undefined = pageToken;
+
+    do {
+      const response = await this.listActivities(
+        sessionId,
+        Math.min(100, Math.max(pageSize, 50)),
+        currentPageToken,
       );
-    });
+
+      const activities = response.activities || [];
+      for (const activity of activities) {
+        const timeStr = activity.createTime || activity.timestamp;
+        if (!timeStr) continue;
+        const activityTime = new Date(timeStr).getTime();
+        if (
+          !isNaN(activityTime) &&
+          !isNaN(sinceTime) &&
+          activityTime > sinceTime
+        ) {
+          collected.push(activity);
+          if (collected.length >= pageSize) {
+            break;
+          }
+        }
+      }
+
+      currentPageToken = response.nextPageToken;
+    } while (currentPageToken && collected.length < pageSize);
 
     return {
-      activities,
-      nextPageToken: response.nextPageToken,
+      activities: collected,
+      nextPageToken:
+        collected.length >= pageSize ? currentPageToken : undefined,
     };
   }
 

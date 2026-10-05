@@ -210,15 +210,29 @@ export class JulesResources {
 
       // Add type-specific details
       if (activity.planGenerated) {
-        const planText =
-          typeof activity.planGenerated.plan === "string"
-            ? activity.planGenerated.plan
-            : activity.planGenerated.plan?.steps
-                ?.map((s) => s.title)
-                .join("\n") || "";
+        const planObj = activity.planGenerated.plan;
+        let planText = "";
+        if (typeof planObj === "string") {
+          planText = planObj;
+        } else if (planObj?.steps && Array.isArray(planObj.steps)) {
+          planText = planObj.steps
+            .map((s, idx) => {
+              const stepNumber = s.index !== undefined ? s.index : idx + 1;
+              const title = s.title
+                ? `${stepNumber}. ${s.title}`
+                : `${stepNumber}. Step`;
+              return s.description ? `${title}\n   ${s.description}` : title;
+            })
+            .join("\n\n");
+        }
+
         return {
           ...base,
           plan: planText,
+          structuredPlan:
+            typeof planObj === "object" && planObj !== null
+              ? planObj
+              : undefined,
           changesPreview: activity.planGenerated.changeSet
             ? `${activity.planGenerated.changeSet.changes?.length || 0} files`
             : "No changes",
