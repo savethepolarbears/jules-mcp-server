@@ -684,5 +684,62 @@ describe("JulesTools", () => {
       const parsed = JSON.parse(result) as { count: number };
       expect(parsed.count).toBe(1);
     });
+
+    it("getSourceDetails extracts defaultBranch displayName object", async () => {
+      vi.mocked(client.getSource).mockResolvedValue({
+        name: "sources/github/owner/repo",
+        githubRepo: {
+          owner: "owner",
+          repo: "repo",
+          defaultBranch: { displayName: "release-1" },
+          htmlUrl: "https://github.com/owner/repo",
+        },
+      });
+
+      const result = await tools.getSourceDetails({ source_name: "sources/github/owner/repo" });
+      const parsed = JSON.parse(result);
+      expect(parsed.defaultBranch).toBe("release-1");
+    });
+
+    it("getActivitiesSince handles empty activities response gracefully", async () => {
+      vi.mocked(client.listActivitiesSince).mockResolvedValue({});
+
+      const result = await tools.getActivitiesSince({
+        session_id: "sess-1",
+        since: "2026-01-01T00:00:00Z",
+      });
+      const parsed = JSON.parse(result);
+      expect(parsed.count).toBe(0);
+      expect(parsed.activities).toEqual([]);
+    });
+
+    it("getActivitiesSince passes page_token and returns nextPageToken", async () => {
+      vi.mocked(client.listActivitiesSince).mockResolvedValue({
+        activities: [
+          {
+            type: "PLAN_GENERATED",
+            name: "activities/2",
+            timestamp: "2026-01-02T00:00:00Z",
+          },
+        ],
+        nextPageToken: "next-cursor-token",
+      });
+
+      const result = await tools.getActivitiesSince({
+        session_id: "sess-1",
+        since: "2026-01-01T00:00:00Z",
+        page_size: 10,
+        page_token: "current-cursor-token",
+      });
+      const parsed = JSON.parse(result);
+      expect(parsed.count).toBe(1);
+      expect(parsed.nextPageToken).toBe("next-cursor-token");
+      expect(client.listActivitiesSince).toHaveBeenCalledWith(
+        "sess-1",
+        "2026-01-01T00:00:00Z",
+        10,
+        "current-cursor-token",
+      );
+    });
   });
 });

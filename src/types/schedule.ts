@@ -7,7 +7,7 @@
 /**
  * Payload for a task to be sent to the Jules API.
  */
-export interface TaskPayload {
+interface TaskPayload {
   /** The natural language instruction for Jules */
   prompt: string;
   /** Repository resource name (sources/github/owner/repo) */
@@ -15,7 +15,7 @@ export interface TaskPayload {
   /** Target branch (defaults to main) */
   branch?: string;
   /** Whether to auto-create PR on completion */
-  automationMode: 'AUTO_CREATE_PR' | 'AUTOMATION_MODE_UNSPECIFIED';
+  automationMode: "AUTO_CREATE_PR" | "AUTOMATION_MODE_UNSPECIFIED";
   /** Whether to require plan approval */
   requirePlanApproval?: boolean;
   /** Optional session title */

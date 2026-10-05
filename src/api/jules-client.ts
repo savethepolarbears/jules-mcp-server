@@ -4,6 +4,7 @@
  */
 
 import type {
+  Activity,
   Source,
   ListSourcesResponse,
   Session,
@@ -11,7 +12,7 @@ import type {
   ListSessionsResponse,
   ListActivitiesResponse,
   SendMessageRequest,
-} from '../types/jules-api.js';
+} from "../types/jules-api.js";
 
 /**
  * Custom error class for Jules API interactions.
@@ -26,10 +27,10 @@ export class JulesAPIError extends Error {
   constructor(
     message: string,
     public statusCode?: number,
-    public response?: unknown
+    public response?: unknown,
   ) {
     super(message);
-    this.name = 'JulesAPIError';
+    this.name = "JulesAPIError";
   }
 }
 
@@ -37,7 +38,7 @@ export class JulesAPIError extends Error {
  * Client for interacting with the Google Jules REST API.
  */
 export class JulesClient {
-  private readonly baseURL = 'https://jules.googleapis.com/v1alpha';
+  private readonly baseURL = "https://jules.googleapis.com/v1alpha";
   private readonly apiKey: string;
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
@@ -48,11 +49,11 @@ export class JulesClient {
    * @throws Error if no API key is provided or found in environment variables.
    */
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || process.env.JULES_API_KEY || '';
+    this.apiKey = apiKey || process.env.JULES_API_KEY || "";
     if (!this.apiKey) {
       throw new Error(
-        'JULES_API_KEY environment variable is required. ' +
-          'Generate a key at https://jules.google/settings'
+        "JULES_API_KEY environment variable is required. " +
+          "Generate a key at https://jules.google/settings",
       );
     }
     this.timeoutMs = Number(process.env.JULES_API_TIMEOUT_MS || 15000);
@@ -64,7 +65,9 @@ export class JulesClient {
    * @param params - Query parameters to encode.
    * @returns Encoded query string, including the leading `?` when needed.
    */
-  private buildQuery(params: Record<string, string | number | undefined>): string {
+  private buildQuery(
+    params: Record<string, string | number | undefined>,
+  ): string {
     const searchParams = new URLSearchParams();
 
     for (const [key, value] of Object.entries(params)) {
@@ -74,7 +77,7 @@ export class JulesClient {
     }
 
     const query = searchParams.toString();
-    return query ? `?${query}` : '';
+    return query ? `?${query}` : "";
   }
 
   /**
@@ -86,12 +89,12 @@ export class JulesClient {
    */
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const headers = {
-      'X-Goog-Api-Key': this.apiKey,
-      'Content-Type': 'application/json',
+      "X-Goog-Api-Key": this.apiKey,
+      "Content-Type": "application/json",
       ...options.headers,
     };
 
@@ -120,7 +123,7 @@ export class JulesClient {
           // SECURE: Truncate error body to prevent log flooding or PII leakage
           const errorBody =
             rawErrorBody.length > 500
-              ? rawErrorBody.substring(0, 500) + '... [truncated]'
+              ? rawErrorBody.substring(0, 500) + "... [truncated]"
               : rawErrorBody;
 
           // Retry on transient 5xx
@@ -129,14 +132,14 @@ export class JulesClient {
             lastError = new JulesAPIError(
               `Jules API error: ${response.statusText}`,
               response.status,
-              errorBody
+              errorBody,
             );
             continue;
           }
           throw new JulesAPIError(
             `Jules API error: ${response.statusText}`,
             response.status,
-            errorBody
+            errorBody,
           );
         }
 
@@ -149,15 +152,14 @@ export class JulesClient {
           throw error;
         }
 
-        const isAbort =
-          error instanceof Error && error.name === 'AbortError';
+        const isAbort = error instanceof Error && error.name === "AbortError";
         if ((isAbort || error instanceof Error) && attempt < this.maxRetries) {
           attempt++;
           lastError = error;
           continue;
         }
         throw new JulesAPIError(
-          `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Network error: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
       }
     }
@@ -165,8 +167,8 @@ export class JulesClient {
     // Exhausted retries
     throw new JulesAPIError(
       `Network error after ${this.maxRetries + 1} attempts: ${
-        lastError instanceof Error ? lastError.message : 'Unknown error'
-      }`
+        lastError instanceof Error ? lastError.message : "Unknown error"
+      }`,
     );
   }
 
@@ -178,12 +180,12 @@ export class JulesClient {
    */
   private async requestEmpty(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
   ): Promise<Record<string, unknown>> {
     const url = `${this.baseURL}${endpoint}`;
     const headers = {
-      'X-Goog-Api-Key': this.apiKey,
-      'Content-Type': 'application/json',
+      "X-Goog-Api-Key": this.apiKey,
+      "Content-Type": "application/json",
       ...options.headers,
     };
 
@@ -199,14 +201,18 @@ export class JulesClient {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
-        const response = await fetch(url, { ...options, headers, signal: controller.signal });
+        const response = await fetch(url, {
+          ...options,
+          headers,
+          signal: controller.signal,
+        });
         clearTimeout(timeoutId);
         if (!response.ok) {
           const rawErrorBody = await response.text();
           // SECURE: Truncate error body to prevent log flooding or PII leakage
           const errorBody =
             rawErrorBody.length > 500
-              ? rawErrorBody.substring(0, 500) + '... [truncated]'
+              ? rawErrorBody.substring(0, 500) + "... [truncated]"
               : rawErrorBody;
 
           // Retry on transient 5xx
@@ -215,14 +221,14 @@ export class JulesClient {
             lastError = new JulesAPIError(
               `Jules API error: ${response.statusText}`,
               response.status,
-              errorBody
+              errorBody,
             );
             continue;
           }
           throw new JulesAPIError(
             `Jules API error: ${response.statusText}`,
             response.status,
-            errorBody
+            errorBody,
           );
         }
         // Body may be empty (204 No Content) — return {} rather than trying to parse JSON
@@ -236,14 +242,14 @@ export class JulesClient {
           throw error;
         }
 
-        const isAbort = error instanceof Error && error.name === 'AbortError';
+        const isAbort = error instanceof Error && error.name === "AbortError";
         if ((isAbort || error instanceof Error) && attempt < this.maxRetries) {
           attempt++;
           lastError = error;
           continue;
         }
         throw new JulesAPIError(
-          `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Network error: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
       }
     }
@@ -251,8 +257,8 @@ export class JulesClient {
     // Exhausted retries
     throw new JulesAPIError(
       `Network error after ${this.maxRetries + 1} attempts: ${
-        lastError instanceof Error ? lastError.message : 'Unknown error'
-      }`
+        lastError instanceof Error ? lastError.message : "Unknown error"
+      }`,
     );
   }
 
@@ -264,10 +270,10 @@ export class JulesClient {
    */
   async listSources(
     pageSize = 100,
-    pageToken?: string
+    pageToken?: string,
   ): Promise<ListSourcesResponse> {
     return this.request<ListSourcesResponse>(
-      `/sources${this.buildQuery({ pageSize, pageToken })}`
+      `/sources${this.buildQuery({ pageSize, pageToken })}`,
     );
   }
 
@@ -288,8 +294,8 @@ export class JulesClient {
    * @returns A promise that resolves with the created session.
    */
   async createSession(request: CreateSessionRequest): Promise<Session> {
-    return this.request<Session>('/sessions', {
-      method: 'POST',
+    return this.request<Session>("/sessions", {
+      method: "POST",
       body: JSON.stringify(request),
     });
   }
@@ -302,10 +308,10 @@ export class JulesClient {
    */
   async listSessions(
     pageSize = 20,
-    pageToken?: string
+    pageToken?: string,
   ): Promise<ListSessionsResponse> {
     return this.request<ListSessionsResponse>(
-      `/sessions${this.buildQuery({ pageSize, pageToken })}`
+      `/sessions${this.buildQuery({ pageSize, pageToken })}`,
     );
   }
 
@@ -327,8 +333,8 @@ export class JulesClient {
    */
   async approvePlan(sessionId: string): Promise<Session> {
     return this.request<Session>(`/sessions/${sessionId}:approvePlan`, {
-      method: 'POST',
-      body: '{}',
+      method: "POST",
+      body: "{}",
     });
   }
 
@@ -341,10 +347,10 @@ export class JulesClient {
    */
   async sendMessage(
     sessionId: string,
-    request: SendMessageRequest
+    request: SendMessageRequest,
   ): Promise<Session> {
     return this.request<Session>(`/sessions/${sessionId}:sendMessage`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(request),
     });
   }
@@ -359,35 +365,70 @@ export class JulesClient {
   async listActivities(
     sessionId: string,
     pageSize = 50,
-    pageToken?: string
+    pageToken?: string,
   ): Promise<ListActivitiesResponse> {
     return this.request<ListActivitiesResponse>(
       `/sessions/${sessionId}/activities${this.buildQuery({
         pageSize,
         pageToken,
-      })}`
+      })}`,
     );
   }
 
   /**
    * List activities for a session created after a given timestamp.
-   * GET /v1alpha/sessions/{id}/activities?filter=createTime>"{since}"
+   * Traverses paginated pages from the Jules API while filtering client-side by createTime/timestamp,
+   * collecting matching activities until the requested number of matches (`pageSize`) is collected
+   * or the results are exhausted.
+   *
    * @param sessionId - The ID of the session to list activities for.
    * @param since - ISO timestamp boundary.
-   * @param pageSize - The maximum number of activities to return.
-   * @returns A promise that resolves with the filtered activities.
+   * @param pageSize - The maximum number of matching activities to collect and return.
+   * @param pageToken - Optional page token to resume pagination from a previous call.
+   * @returns A promise that resolves with the filtered activities and the next page token if more results remain.
    */
   async listActivitiesSince(
     sessionId: string,
     since: string,
-    pageSize = 50
+    pageSize = 50,
+    pageToken?: string,
   ): Promise<ListActivitiesResponse> {
-    return this.request<ListActivitiesResponse>(
-      `/sessions/${sessionId}/activities${this.buildQuery({
-        pageSize,
-        filter: `createTime>"${since.replace(/"/g, '')}"`,
-      })}`
-    );
+    const sinceTime = new Date(since).getTime();
+    const collected: Activity[] = [];
+    let currentPageToken: string | undefined = pageToken;
+
+    do {
+      const response = await this.listActivities(
+        sessionId,
+        Math.min(100, Math.max(pageSize, 50)),
+        currentPageToken,
+      );
+
+      const activities = response.activities || [];
+      for (const activity of activities) {
+        const timeStr = activity.createTime || activity.timestamp;
+        if (!timeStr) continue;
+        const activityTime = new Date(timeStr).getTime();
+        if (
+          !isNaN(activityTime) &&
+          !isNaN(sinceTime) &&
+          activityTime > sinceTime
+        ) {
+          collected.push(activity);
+          if (collected.length >= pageSize) {
+            break;
+          }
+        }
+      }
+
+      currentPageToken = response.nextPageToken;
+    } while (currentPageToken && collected.length < pageSize);
+
+    return {
+      activities: collected,
+      nextPageToken:
+        collected.length >= pageSize ? currentPageToken : undefined,
+    };
   }
 
   /**
@@ -398,7 +439,7 @@ export class JulesClient {
    */
   async deleteSession(sessionId: string): Promise<Record<string, unknown>> {
     return this.requestEmpty(`/sessions/${sessionId}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   }
 
@@ -410,7 +451,7 @@ export class JulesClient {
    */
   async rejectPlan(sessionId: string): Promise<Record<string, unknown>> {
     return this.requestEmpty(`/sessions/${sessionId}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   }
 }

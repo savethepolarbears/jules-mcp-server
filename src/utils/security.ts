@@ -5,14 +5,14 @@
 export class SecurityError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'SecurityError';
+    this.name = "SecurityError";
   }
 }
 
 export class RateLimitError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'RateLimitError';
+    this.name = "RateLimitError";
   }
 }
 
@@ -36,7 +36,7 @@ export class RepositoryValidator {
     const allowList = process.env.JULES_ALLOWED_REPOS;
     if (allowList) {
       this.allowedRepos = allowList
-        .split(',')
+        .split(",")
         .map((r) => r.trim())
         .filter((r) => r.length > 0);
     }
@@ -59,7 +59,7 @@ export class RepositoryValidator {
     const match = /^sources\/github\/(.+)$/.exec(source);
     if (!match) {
       throw new Error(
-        `Invalid source format: ${source}. Expected sources/github/owner/repo`
+        `Invalid source format: ${source}. Expected sources/github/owner/repo`,
       );
     }
 
@@ -68,7 +68,7 @@ export class RepositoryValidator {
     if (!this.allowedRepos.includes(repoPath)) {
       throw new SecurityError(
         `Security Error: Repository "${repoPath}" is not in the allowed list. ` +
-          `Set JULES_ALLOWED_REPOS environment variable to authorize additional repositories.`
+          `Set JULES_ALLOWED_REPOS environment variable to authorize additional repositories.`,
       );
     }
   }
@@ -107,14 +107,14 @@ export function smartTruncate(text: string, maxLength: number): string {
 
   // Try to break at a word boundary
   let truncated = text.substring(0, maxLength);
-  const lastSpace = truncated.lastIndexOf(' ');
+  const lastSpace = truncated.lastIndexOf(" ");
 
   if (lastSpace > maxLength * 0.8) {
     // If we can break at a word within 80% of max length, do it
     truncated = truncated.substring(0, lastSpace);
   }
 
-  return truncated.trim() + '...';
+  return truncated.trim() + "...";
 }
 
 /**
@@ -130,7 +130,7 @@ export function smartTruncate(text: string, maxLength: number): string {
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries = 3,
-  baseDelay = 1000
+  baseDelay = 1000,
 ): Promise<T> {
   let lastError: Error;
 
@@ -169,7 +169,9 @@ export class RateLimiter {
    */
   isAllowed(): boolean {
     const now = Date.now();
-    this.timestamps = this.timestamps.filter(t => now - t < this.timeWindowMs);
+    this.timestamps = this.timestamps.filter(
+      (t) => now - t < this.timeWindowMs,
+    );
     if (this.timestamps.length >= this.maxRequests) {
       return false;
     }
@@ -187,15 +189,29 @@ export function containsSecret(text: string): boolean {
   if (!text) return false;
   // Look for common patterns like sk-..., AIza..., generic high-entropy strings might be too noisy
   const patterns = [
-    /sk-[a-zA-Z0-9]{20,}/,    // OpenAI / general secret keys
+    /sk-[a-zA-Z0-9]{20,}/, // OpenAI / general secret keys
     /AIza[0-9A-Za-z-_]{35}/, // Google API keys
-    /ghp_[a-zA-Z0-9]{36}/,    // GitHub personal access token
-    /ghs_[a-zA-Z0-9]{36}/,    // GitHub server token
+    /ghp_[a-zA-Z0-9]{36}/, // GitHub personal access token
+    /ghs_[a-zA-Z0-9]{36}/, // GitHub server token
     /github_pat_[a-zA-Z0-9_]{82}/, // GitHub fine-grained PAT
-    /AKIA[0-9A-Z]{16}/,       // AWS access key
+    /AKIA[0-9A-Z]{16}/, // AWS access key
     /sk-ant-[a-zA-Z0-9_-]{93}/, // Anthropic API key
-    /hf_[a-zA-Z0-9]{37}/,      // HuggingFace token
-    /xox[pboa]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32}/ // Slack tokens
+    /hf_[a-zA-Z0-9]{37}/, // HuggingFace token
+    /xox[pboa]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32}/, // Slack tokens
   ];
-  return patterns.some(pattern => pattern.test(text));
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+/**
+ * Extracts a normalized branch name from a string or branch object.
+ *
+ * @param branch - The branch representation (string or object with displayName).
+ * @returns {string} The normalized branch name, falling back to 'main'.
+ */
+export function extractBranchName(
+  branch?: { displayName?: string } | string,
+): string {
+  if (!branch) return "main";
+  if (typeof branch === "string") return branch;
+  return branch.displayName || "main";
 }

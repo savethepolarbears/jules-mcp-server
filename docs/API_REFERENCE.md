@@ -714,7 +714,7 @@ The API is structured around three primary resource types:
 | ----------- | --------- | ------- |
 | Jules API | v1alpha | Experimental, may change |
 | MCP Protocol | 2025-03-26 | Streamable HTTP spec |
-| Node.js | >=18.0.0 | Required for fetch API |
+| Node.js | >=20.0.0 | Required for modern runtime and test runner |
 | TypeScript | >=5.0.0 | For strict type checking |
 
 ## Additional Resources
