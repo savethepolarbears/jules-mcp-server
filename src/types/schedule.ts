@@ -47,11 +47,33 @@ export interface ScheduledTask {
 }
 
 /**
+ * Metadata for a recently observed or created Jules session stored in the local ledger.
+ */
+export interface RecentSessionRecord {
+  /** Unique session identifier */
+  id: string;
+  /** Optional human-readable session title */
+  title?: string;
+  /** Last observed session state */
+  state?: string;
+  /** Truncated task prompt */
+  prompt?: string;
+  /** Repository resource name or "repoless" */
+  repository?: string;
+  /** ISO timestamp when session was created */
+  created?: string;
+  /** ISO timestamp when session was last updated/observed */
+  updated?: string;
+}
+
+/**
  * Schema for the schedule store file.
  */
 export interface ScheduleStore {
   /** Map of schedule ID to ScheduledTask */
   schedules: Record<string, ScheduledTask>;
+  /** Optional bounded ledger of recent sessions for fallback when sessions.list is unavailable */
+  recentSessions?: RecentSessionRecord[];
   /** Schema version for future migrations */
   version: string;
 }

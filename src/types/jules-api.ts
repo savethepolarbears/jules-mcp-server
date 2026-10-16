@@ -174,18 +174,48 @@ type ActivityType =
   | "PLAN_GENERATED"
   | "PROGRESS_UPDATED"
   | "SESSION_COMPLETED"
+  | "SESSION_FAILED"
   | "MESSAGE_SENT"
+  | "USER_MESSAGED"
   | "AGENT_MESSAGED"
   | "PLAN_APPROVED"
   | "ACTIVITY_TYPE_UNSPECIFIED";
 
 /**
- * Represents a set of changes in a plan.
+ * Git patch payload emitted inside v1alpha activity artifacts.
+ */
+export interface GitPatch {
+  /** Unified diff patch string emitted by v1alpha. */
+  unidiffPatch?: string;
+  /** Base commit SHA that the patch was generated against. */
+  baseCommitId?: string;
+  /** Suggested commit message for the patch. */
+  suggestedCommitMessage?: string;
+}
+
+/**
+ * Bash command execution output emitted inside v1alpha activity artifacts.
+ */
+export interface BashOutput {
+  /** Command string executed in the session container. */
+  command?: string;
+  /** Combined stdout/stderr output. */
+  output?: string;
+  /** Command exit code. */
+  exitCode?: number;
+}
+
+/**
+ * Represents a set of changes in a plan or activity artifact.
  */
 export interface ChangeSet {
-  /** Unified patch for the full change set */
+  /** Source resource name (e.g., sources/github/owner/repo). */
+  source?: string;
+  /** Git patch payload emitted by the v1alpha API. */
+  gitPatch?: GitPatch;
+  /** Unified patch for the full change set (legacy). */
   patch?: string;
-  /** Array of file changes */
+  /** Array of file changes. */
   changes?: {
     /** The path of the file changed. */
     path: string;
@@ -196,6 +226,27 @@ export interface ChangeSet {
     /** The new content of the file. */
     newContent?: string;
   }[];
+}
+
+/**
+ * Artifact produced during an activity step in the v1alpha API.
+ */
+export interface Artifact {
+  /** Code change set artifact. */
+  changeSet?: ChangeSet;
+  /** Shell execution output artifact. */
+  bashOutput?: BashOutput;
+  /** Media artifact (e.g., screenshot). */
+  media?: {
+    /** Base64-encoded media payload. */
+    data?: string;
+    /** Optional media URL. */
+    url?: string;
+    /** Media MIME type. */
+    mimeType?: string;
+    /** Optional human-readable description. */
+    description?: string;
+  };
 }
 
 /**
@@ -216,6 +267,8 @@ export interface Activity {
   originator?: string;
   /** Optional human-readable summary. */
   description?: string;
+  /** Artifacts produced by this activity in the v1alpha API. */
+  artifacts?: Artifact[];
   /** Activity-specific payload */
   planGenerated?: {
     /** The generated plan description or plan object. */

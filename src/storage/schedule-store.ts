@@ -9,7 +9,13 @@ import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import crypto from 'crypto';
-import type { ScheduledTask, ScheduleStore } from '../types/schedule.js';
+import type {
+  RecentSessionRecord,
+  ScheduledTask,
+  ScheduleStore,
+} from '../types/schedule.js';
+
+const MAX_RECENT_SESSIONS = 50;
 
 class Mutex {
   private queue: (() => void)[] = [];
@@ -305,8 +311,55 @@ export class ScheduleStorage {
     if (task) {
       task.lastRun = timestamp;
       task.lastSessionId = sessionId;
+      if (sessionId) {
+        const existing = store.recentSessions || [];
+        const record: RecentSessionRecord = {
+          id: sessionId,
+          title: task.taskPayload.title || task.name,
+          state: 'QUEUED',
+          prompt: task.taskPayload.prompt,
+          repository: task.taskPayload.source,
+          created: timestamp,
+          updated: timestamp,
+        };
+        store.recentSessions = [
+          record,
+          ...existing.filter((item) => item.id !== sessionId),
+        ].slice(0, MAX_RECENT_SESSIONS);
+      }
       await this.save(store);
     }
+  }
+
+  /**
+   * Records or updates a session entry in the bounded local session ledger.
+   * Used as a fast local fallback when GET /v1alpha/sessions is unavailable.
+   * @param session - The session metadata to record.
+   */
+  async recordSession(session: RecentSessionRecord): Promise<void> {
+    if (!session.id) {
+      return;
+    }
+    const store = await this.load();
+    const existing = store.recentSessions || [];
+    const previous = existing.find((item) => item.id === session.id);
+    const merged: RecentSessionRecord = {
+      ...previous,
+      ...session,
+      updated: session.updated || new Date().toISOString(),
+    };
+    const filtered = existing.filter((item) => item.id !== session.id);
+    store.recentSessions = [merged, ...filtered].slice(0, MAX_RECENT_SESSIONS);
+    await this.save(store);
+  }
+
+  /**
+   * Lists recently recorded sessions from the local session ledger.
+   * @returns An array of recent session records ordered most-recent first.
+   */
+  async listRecentSessions(): Promise<RecentSessionRecord[]> {
+    const store = await this.load();
+    return store.recentSessions || [];
   }
 
   /**

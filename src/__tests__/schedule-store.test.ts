@@ -275,6 +275,38 @@ describe("ScheduleStorage", () => {
       await storage.listTasks(); // Reloads from disk
       expect(fsPromises.readFile).toHaveBeenCalledTimes(2);
     });
+
+    it("should record and deduplicate recent sessions in the local ledger", async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        await createEncryptedPayload({ schedules: {}, version: "1.0.0" }, "test-key")
+      );
+
+      await storage.recordSession({
+        id: "sess-1",
+        title: "First Task",
+        state: "QUEUED",
+        prompt: "Do A",
+        repository: "sources/github/owner/repo",
+      });
+      await storage.recordSession({
+        id: "sess-2",
+        title: "Second Task",
+        state: "IN_PROGRESS",
+        prompt: "Do B",
+        repository: "repoless",
+      });
+      await storage.recordSession({
+        id: "sess-1",
+        state: "COMPLETED",
+      });
+
+      const recent = await storage.listRecentSessions();
+      expect(recent).toHaveLength(2);
+      expect(recent[0].id).toBe("sess-1");
+      expect(recent[0].title).toBe("First Task");
+      expect(recent[0].state).toBe("COMPLETED");
+      expect(recent[1].id).toBe("sess-2");
+    });
   });
 });
 

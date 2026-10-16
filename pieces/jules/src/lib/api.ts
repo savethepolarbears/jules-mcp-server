@@ -120,24 +120,81 @@ export interface Session {
 export interface Activity {
   /** Resource name of the activity */
   name: string;
-  /** The type of activity */
-  type: string;
+  /** Unique activity identifier */
+  id?: string;
+  /** The type of activity (optional in v1alpha responses) */
+  type?: string;
   /** ISO timestamp when the activity occurred */
   timestamp?: string;
+  /** ISO timestamp emitted by the v1alpha API */
+  createTime?: string;
+  /** Originator of the activity ("user" | "agent" | "system") */
+  originator?: string;
+  /** Optional human-readable summary */
+  description?: string;
+  /** Artifacts emitted during the activity step */
+  artifacts?: Array<{
+    changeSet?: {
+      source?: string;
+      gitPatch?: {
+        unidiffPatch?: string;
+        baseCommitId?: string;
+        suggestedCommitMessage?: string;
+      };
+      patch?: string;
+    };
+    bashOutput?: {
+      command?: string;
+      output?: string;
+      exitCode?: number;
+    };
+    media?: {
+      data?: string;
+      url?: string;
+      mimeType?: string;
+      description?: string;
+    };
+  }>;
   /** Payload for PLAN_GENERATED type */
-  planGenerated?: { plan: string };
+  planGenerated?: {
+    plan:
+      | string
+      | {
+          id?: string;
+          steps?: Array<{
+            id?: string;
+            title: string;
+            description?: string;
+            index?: number;
+          }>;
+          createTime?: string;
+        };
+  };
   /** Payload for PROGRESS_UPDATED type */
-  progressUpdated?: { message: string; percentage?: number };
+  progressUpdated?: {
+    message?: string;
+    title?: string;
+    description?: string;
+    percentage?: number;
+  };
   /** Payload for SESSION_COMPLETED type */
   sessionCompleted?: {
-    success: boolean;
+    success?: boolean;
     message?: string;
     pullRequestUrl?: string;
   };
+  /** Payload for SESSION_FAILED type */
+  sessionFailed?: {
+    reason?: string;
+  };
   /** Payload for MESSAGE_SENT type */
   messageSent?: { prompt: string; sender: string };
+  /** Payload for USER_MESSAGED type */
+  userMessaged?: { userMessage: string };
   /** Payload for AGENT_MESSAGED type */
-  agentMessaged?: { message: string };
+  agentMessaged?: { message?: string; agentMessage?: string };
+  /** Payload for PLAN_APPROVED type */
+  planApproved?: { approvedAt?: string; planId?: string };
 }
 
 /**

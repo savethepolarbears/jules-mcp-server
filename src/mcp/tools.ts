@@ -387,6 +387,16 @@ export class JulesTools {
         title: args.title,
       });
 
+      await this.storage.recordSession?.({
+        id: session.id,
+        title: session.title || args.title,
+        state: session.state || "QUEUED",
+        prompt: args.prompt,
+        repository: args.source,
+        created: session.createTime || new Date().toISOString(),
+        updated: session.updateTime,
+      });
+
       const statusMsg = args.require_plan_approval
         ? "Session created and waiting for plan approval. Use jules://sessions/{id}/full to review the plan, then call manage_session with action=approve_plan."
         : "Session created and executing automatically.";
@@ -421,6 +431,16 @@ export class JulesTools {
       const session = await this.client.createSession({
         prompt: args.prompt,
         title: args.title,
+      });
+
+      await this.storage.recordSession?.({
+        id: session.id,
+        title: session.title || args.title,
+        state: session.state || "QUEUED",
+        prompt: args.prompt,
+        repository: "repoless",
+        created: session.createTime || new Date().toISOString(),
+        updated: session.updateTime,
       });
 
       return {
@@ -493,6 +513,16 @@ export class JulesTools {
     return this.executeWithErrorHandling(async () => {
       const session = await this.client.getSession(args.session_id);
 
+      await this.storage.recordSession?.({
+        id: session.id || args.session_id,
+        title: session.title,
+        state: session.state,
+        prompt: session.prompt,
+        repository: this.getRepositoryLabel(session),
+        created: session.createTime,
+        updated: session.updateTime,
+      });
+
       return {
         sessionId: session.id,
         title: session.title,
@@ -508,6 +538,7 @@ export class JulesTools {
   /**
    * Tool: wait_for_session
    * Polls the Jules API until the target state is reached or the timeout expires.
+   * Uses adaptive exponential backoff for long-running sessions to conserve API quota.
    *
    * @param args - The structured arguments matching `WaitForSessionSchema`.
    * @returns {Promise<string>} A JSON string representing the final observed session state.
@@ -518,12 +549,26 @@ export class JulesTools {
     return this.executeWithErrorHandling(async () => {
       const startedAt = Date.now();
       const timeoutMs = args.timeout_seconds * 1000;
+      const baseIntervalMs = args.poll_interval_seconds * 1000;
+      const maxIntervalMs = Math.min(60000, baseIntervalMs * 3);
       const targetStates = new Set<SessionState>(args.target_states);
+      let pollCount = 0;
 
       while (true) {
         const session = await this.client.getSession(args.session_id);
         const currentState = session.state;
-        const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
+        const elapsedMs = Date.now() - startedAt;
+        const elapsedSeconds = Math.round(elapsedMs / 1000);
+
+        await this.storage.recordSession?.({
+          id: session.id || args.session_id,
+          title: session.title,
+          state: currentState,
+          prompt: session.prompt,
+          repository: this.getRepositoryLabel(session),
+          created: session.createTime,
+          updated: session.updateTime,
+        });
 
         if (currentState && targetStates.has(currentState)) {
           return {
@@ -536,13 +581,20 @@ export class JulesTools {
           };
         }
 
-        if (Date.now() - startedAt >= timeoutMs) {
+        if (elapsedMs >= timeoutMs) {
           throw new Error(
             `Timed out waiting for session "${args.session_id}" after ${elapsedSeconds} seconds`,
           );
         }
 
-        await this.delay(args.poll_interval_seconds * 1000);
+        pollCount += 1;
+        const backoffFactor = Math.pow(1.5, Math.floor(pollCount / 3));
+        const nextDelayMs = Math.min(
+          maxIntervalMs,
+          Math.round(baseIntervalMs * backoffFactor),
+          Math.max(1, timeoutMs - elapsedMs),
+        );
+        await this.delay(nextDelayMs);
       }
     });
   }

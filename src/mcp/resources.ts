@@ -51,24 +51,104 @@ export class JulesResources {
   }
 
   /**
-   * Finds the most recent change set attached to session activities.
+   * Extracts changed file paths from a unified git diff string.
+   * @param unidiff - Unified diff text.
+   * @returns Deduplicated array of file change entries.
+   */
+  private extractChangesFromUnidiff(unidiff?: string): { path: string }[] {
+    if (!unidiff) {
+      return [];
+    }
+    const seen = new Set<string>();
+    const changes: { path: string }[] = [];
+    for (const line of unidiff.split("\n")) {
+      const gitMatch = /^diff --git a\/.+ b\/(.+)$/.exec(line.trim());
+      if (gitMatch?.[1] && !seen.has(gitMatch[1])) {
+        seen.add(gitMatch[1]);
+        changes.push({ path: gitMatch[1] });
+      }
+    }
+    return changes;
+  }
+
+  /**
+   * Infers a normalized activity type label from a raw v1alpha Activity object.
+   * @param activity - Raw activity from the Jules API.
+   * @returns Normalized activity type string.
+   */
+  private inferActivityType(activity: Activity): NonNullable<Activity["type"]> {
+    if (activity.type) {
+      return activity.type;
+    }
+    if (activity.agentMessaged) return "AGENT_MESSAGED";
+    if (activity.userMessaged) return "USER_MESSAGED";
+    if (activity.planGenerated) return "PLAN_GENERATED";
+    if (activity.progressUpdated) return "PROGRESS_UPDATED";
+    if (activity.sessionCompleted) return "SESSION_COMPLETED";
+    if (activity.sessionFailed) return "SESSION_FAILED";
+    if (activity.planApproved) return "PLAN_APPROVED";
+    if (activity.messageSent) return "MESSAGE_SENT";
+    return "ACTIVITY_TYPE_UNSPECIFIED";
+  }
+
+  /**
+   * Finds the most recent change set attached to session activities or v1alpha artifacts.
    * @param activities - Activity list in chronological order.
-   * @returns The latest change set and its source activity, if available.
+   * @returns The latest change set, normalized patch, changes list, and source activity metadata.
    */
   private getLatestChangeSet(activities: Activity[]): {
     changeSet?: ChangeSet;
+    patch?: string;
+    changes: NonNullable<ChangeSet["changes"]>;
     activityType?: Activity["type"];
     timestamp?: string;
   } {
     for (let index = activities.length - 1; index >= 0; index -= 1) {
       const activity = activities[index];
+
+      // 1. Inspect v1alpha top-level activity.artifacts[] (newest artifact first)
+      if (Array.isArray(activity.artifacts)) {
+        for (
+          let artIdx = activity.artifacts.length - 1;
+          artIdx >= 0;
+          artIdx -= 1
+        ) {
+          const artifactChangeSet = activity.artifacts[artIdx]?.changeSet;
+          const patch =
+            artifactChangeSet?.gitPatch?.unidiffPatch ??
+            artifactChangeSet?.patch;
+          if (
+            artifactChangeSet &&
+            (patch || artifactChangeSet.changes !== undefined)
+          ) {
+            const changes = Array.isArray(artifactChangeSet.changes)
+              ? artifactChangeSet.changes
+              : this.extractChangesFromUnidiff(patch);
+            return {
+              changeSet: artifactChangeSet,
+              patch,
+              changes,
+              activityType: this.inferActivityType(activity),
+              timestamp: activity.createTime || activity.timestamp,
+            };
+          }
+        }
+      }
+
+      // 2. Fallback to legacy sessionCompleted.changeSet or planGenerated.changeSet
       const changeSet =
         activity.sessionCompleted?.changeSet ||
         activity.planGenerated?.changeSet;
 
       if (changeSet) {
+        const patch = changeSet.gitPatch?.unidiffPatch ?? changeSet.patch;
+        const changes = Array.isArray(changeSet.changes)
+          ? changeSet.changes
+          : this.extractChangesFromUnidiff(patch);
         return {
           changeSet,
+          patch,
+          changes,
           activityType:
             activity.type ||
             (activity.sessionCompleted
@@ -79,7 +159,7 @@ export class JulesResources {
       }
     }
 
-    return {};
+    return { changes: [] };
   }
 
   /**
@@ -116,34 +196,88 @@ export class JulesResources {
 
   /**
    * Resource: jules://sessions/list
-   * Returns a summary of recent sessions. This gives the LLM context of what
-   * tasks have been run recently.
+   * Returns a summary of recent sessions. Falls back to the local session ledger
+   * if the upstream GET /v1alpha/sessions endpoint returns 503 or times out.
    *
    * @returns {Promise<string>} A JSON string representing a summary of recent sessions.
    */
   async getSessionsList(): Promise<string> {
-    const response = await this.client.listSessions(50);
-    const sessions = response.sessions || [];
+    try {
+      const response = await this.client.listSessions(50);
+      const sessions = response.sessions || [];
 
-    const formatted = sessions.map((session) => ({
-      id: session.id,
-      title: session.title || "Untitled Task",
-      state: session.state || "UNKNOWN",
-      prompt: smartTruncate(session.prompt, 100),
-      repository: this.getRepositoryLabel(session),
-      created: session.createTime,
-    }));
+      const formatted = sessions.map((session) => ({
+        id: session.id,
+        title: session.title || "Untitled Task",
+        state: session.state || "UNKNOWN",
+        prompt: smartTruncate(session.prompt, 100),
+        repository: this.getRepositoryLabel(session),
+        created: session.createTime,
+      }));
 
-    return JSON.stringify(
-      {
-        description:
-          "Recent Jules sessions (tasks). Be mindful of API quotas when querying session history frequently.",
-        count: formatted.length,
-        sessions: formatted,
-      },
-      null,
-      2,
-    );
+      for (const item of formatted.slice(0, 25)) {
+        await this.storage.recordSession?.({
+          id: item.id,
+          title: item.title,
+          state: item.state,
+          prompt: item.prompt,
+          repository: item.repository,
+          created: item.created,
+        });
+      }
+
+      return JSON.stringify(
+        {
+          description:
+            "Recent Jules sessions (tasks). Be mindful of API quotas when querying session history frequently.",
+          count: formatted.length,
+          sessions: formatted,
+        },
+        null,
+        2,
+      );
+    } catch (error) {
+      const ledgerEntries = (await this.storage.listRecentSessions?.()) || [];
+      const tasks = (await this.storage.listTasks?.()) || [];
+      const seenIds = new Set(ledgerEntries.map((item) => item.id));
+
+      for (const task of tasks) {
+        if (task.lastSessionId && !seenIds.has(task.lastSessionId)) {
+          seenIds.add(task.lastSessionId);
+          ledgerEntries.push({
+            id: task.lastSessionId,
+            title: task.taskPayload.title || task.name,
+            state: "UNKNOWN",
+            prompt: task.taskPayload.prompt,
+            repository: task.taskPayload.source,
+            created: task.lastRun,
+          });
+        }
+      }
+
+      const fallbackSessions = ledgerEntries.map((entry) => ({
+        id: entry.id,
+        title: entry.title || "Untitled Task",
+        state: entry.state || "UNKNOWN",
+        prompt: smartTruncate(entry.prompt || "", 100),
+        repository: entry.repository || "repoless",
+        created: entry.created,
+      }));
+
+      return JSON.stringify(
+        {
+          description:
+            "Recent Jules sessions (served from local session ledger because upstream sessions.list returned an error).",
+          status: "degraded",
+          source: "local_session_ledger",
+          error: error instanceof Error ? error.message : "Unknown API failure",
+          count: fallbackSessions.length,
+          sessions: fallbackSessions,
+        },
+        null,
+        2,
+      );
+    }
   }
 
   /**
@@ -168,6 +302,95 @@ export class JulesResources {
   }
 
   /**
+   * Formats v1alpha activity artifacts (`changeSet`, `bashOutput`, `media`) for concise LLM consumption.
+   * @param activity - Activity containing optional artifacts.
+   * @returns Summarized artifacts array or undefined when empty.
+   */
+  private formatActivityArtifacts(activity: Activity):
+    | {
+        changeSet?: {
+          source?: string;
+          baseCommitId?: string;
+          suggestedCommitMessage?: string;
+          fileCount: number;
+          hasPatch: boolean;
+        };
+        bashOutput?: {
+          command?: string;
+          exitCode?: number;
+          output?: string;
+        };
+        media?: {
+          mimeType?: string;
+          url?: string;
+          description?: string;
+        };
+      }[]
+    | undefined {
+    if (!Array.isArray(activity.artifacts) || activity.artifacts.length === 0) {
+      return undefined;
+    }
+
+    return activity.artifacts.map((artifact) => {
+      const formatted: {
+        changeSet?: {
+          source?: string;
+          baseCommitId?: string;
+          suggestedCommitMessage?: string;
+          fileCount: number;
+          hasPatch: boolean;
+        };
+        bashOutput?: {
+          command?: string;
+          exitCode?: number;
+          output?: string;
+        };
+        media?: {
+          mimeType?: string;
+          url?: string;
+          description?: string;
+        };
+      } = {};
+
+      if (artifact.changeSet) {
+        const patch =
+          artifact.changeSet.gitPatch?.unidiffPatch ?? artifact.changeSet.patch;
+        const changes = Array.isArray(artifact.changeSet.changes)
+          ? artifact.changeSet.changes
+          : this.extractChangesFromUnidiff(patch);
+        formatted.changeSet = {
+          source: artifact.changeSet.source,
+          baseCommitId: artifact.changeSet.gitPatch?.baseCommitId,
+          suggestedCommitMessage:
+            artifact.changeSet.gitPatch?.suggestedCommitMessage,
+          fileCount: changes.length,
+          hasPatch: Boolean(patch),
+        };
+      }
+
+      if (artifact.bashOutput) {
+        formatted.bashOutput = {
+          command: artifact.bashOutput.command,
+          exitCode: artifact.bashOutput.exitCode,
+          output: artifact.bashOutput.output
+            ? smartTruncate(artifact.bashOutput.output, 1000)
+            : undefined,
+        };
+      }
+
+      if (artifact.media) {
+        formatted.media = {
+          mimeType: artifact.media.mimeType,
+          url: artifact.media.url,
+          description: artifact.media.description,
+        };
+      }
+
+      return formatted;
+    });
+  }
+
+  /**
    * Resource: jules://sessions/{id}/full
    * Returns complete session details including activities. This allows the LLM
    * to review plans generated by Jules, monitor progress, and get pull request URLs.
@@ -182,30 +405,26 @@ export class JulesResources {
       this.client.listActivities(sessionId),
     ]);
 
+    await this.storage.recordSession?.({
+      id: session.id || sessionId,
+      title: session.title,
+      state: session.state,
+      prompt: session.prompt,
+      repository: this.getRepositoryLabel(session),
+      created: session.createTime,
+      updated: session.updateTime,
+    });
+
     const activities = activitiesResponse.activities || [];
 
     // Format activities for readability
     const formattedActivities = activities.map((activity) => {
+      const artifacts = this.formatActivityArtifacts(activity);
       const base = {
-        type:
-          activity.type ||
-          (activity.agentMessaged
-            ? "AGENT_MESSAGED"
-            : activity.userMessaged
-              ? "USER_MESSAGED"
-              : activity.planGenerated
-                ? "PLAN_GENERATED"
-                : activity.progressUpdated
-                  ? "PROGRESS_UPDATED"
-                  : activity.sessionCompleted
-                    ? "SESSION_COMPLETED"
-                    : activity.sessionFailed
-                      ? "SESSION_FAILED"
-                      : activity.planApproved
-                        ? "PLAN_APPROVED"
-                        : "ACTIVITY_TYPE_UNSPECIFIED"),
+        type: this.inferActivityType(activity),
         timestamp: activity.createTime || activity.timestamp,
         media: activity.media,
+        ...(artifacts ? { artifacts } : {}),
       };
 
       // Add type-specific details
@@ -360,9 +579,13 @@ export class JulesResources {
         sessionId,
         activityType: latest.activityType,
         timestamp: latest.timestamp,
-        patch: latest.changeSet.patch,
-        fileCount: latest.changeSet.changes?.length || 0,
-        changes: latest.changeSet.changes || [],
+        source: latest.changeSet.source,
+        baseCommitId: latest.changeSet.gitPatch?.baseCommitId,
+        suggestedCommitMessage:
+          latest.changeSet.gitPatch?.suggestedCommitMessage,
+        patch: latest.patch,
+        fileCount: latest.changes.length,
+        changes: latest.changes,
       },
       null,
       2,
