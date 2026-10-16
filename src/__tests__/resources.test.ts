@@ -317,4 +317,147 @@ describe('JulesResources', () => {
     expect(result.activities[0].plan).toContain('Add regression tests in vitest for pagination and error handling.');
     expect(result.activities[0].structuredPlan).toEqual(structuredPlan);
   });
+
+  it('getSessionDiff extracts v1alpha artifact.changeSet.gitPatch.unidiffPatch when sessionCompleted is empty', async () => {
+    const unidiff = [
+      'diff --git a/src/mcp/resources.ts b/src/mcp/resources.ts',
+      'index 1111111..2222222 100644',
+      '--- a/src/mcp/resources.ts',
+      '+++ b/src/mcp/resources.ts',
+      '@@ -1,3 +1,4 @@',
+      '+// updated',
+      'diff --git a/src/types/jules-api.ts b/src/types/jules-api.ts',
+      '--- a/src/types/jules-api.ts',
+      '+++ b/src/types/jules-api.ts',
+    ].join('\n');
+
+    (clientMock.listActivities as ReturnType<typeof vi.fn>).mockResolvedValue({
+      activities: [
+        {
+          name: 'sessions/sess-v1/activities/act-1',
+          createTime: '2026-08-15T10:00:00Z',
+          originator: 'agent',
+          progressUpdated: { title: 'Ran tests and updated types' },
+          artifacts: [
+            {
+              bashOutput: {
+                command: 'npm test',
+                output: '10 passed',
+                exitCode: 0,
+              },
+            },
+            {
+              changeSet: {
+                source: 'sources/github/savethepolarbears/jules-mcp-server',
+                gitPatch: {
+                  unidiffPatch: unidiff,
+                  baseCommitId: '0ebc18d',
+                  suggestedCommitMessage: 'fix: support v1alpha artifacts',
+                },
+              },
+            },
+          ],
+        },
+        {
+          name: 'sessions/sess-v1/activities/act-2',
+          createTime: '2026-08-15T10:01:00Z',
+          originator: 'agent',
+          sessionCompleted: {},
+        },
+      ],
+    });
+
+    const result = JSON.parse(await resources.getSessionDiff('sess-v1'));
+    expect(result.sessionId).toBe('sess-v1');
+    expect(result.activityType).toBe('PROGRESS_UPDATED');
+    expect(result.source).toBe('sources/github/savethepolarbears/jules-mcp-server');
+    expect(result.baseCommitId).toBe('0ebc18d');
+    expect(result.suggestedCommitMessage).toBe('fix: support v1alpha artifacts');
+    expect(result.patch).toContain('diff --git a/src/mcp/resources.ts');
+    expect(result.fileCount).toBe(2);
+    expect(result.changes).toEqual([
+      { path: 'src/mcp/resources.ts' },
+      { path: 'src/types/jules-api.ts' },
+    ]);
+  });
+
+  it('getSessionFull includes formatted v1alpha artifacts (bashOutput, changeSet, media)', async () => {
+    (clientMock.getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'sess-artifacts',
+      state: 'COMPLETED',
+    });
+    (clientMock.listActivities as ReturnType<typeof vi.fn>).mockResolvedValue({
+      activities: [
+        {
+          name: 'sessions/sess-artifacts/activities/act-1',
+          createTime: '2026-08-15T10:00:00Z',
+          originator: 'agent',
+          progressUpdated: { title: 'Verified build' },
+          artifacts: [
+            {
+              bashOutput: {
+                command: 'npm run build',
+                output: 'Build succeeded',
+                exitCode: 0,
+              },
+              changeSet: {
+                source: 'sources/github/owner/repo',
+                gitPatch: {
+                  unidiffPatch: 'diff --git a/a.ts b/a.ts\n+const x = 1;',
+                  baseCommitId: 'abc1234',
+                  suggestedCommitMessage: 'feat: add x',
+                },
+              },
+              media: {
+                mimeType: 'image/png',
+                description: 'UI screenshot',
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = JSON.parse(await resources.getSessionFull('sess-artifacts'));
+    expect(result.activities[0].artifacts).toHaveLength(1);
+    expect(result.activities[0].artifacts[0].bashOutput).toEqual({
+      command: 'npm run build',
+      output: 'Build succeeded',
+      exitCode: 0,
+    });
+    expect(result.activities[0].artifacts[0].changeSet).toEqual({
+      source: 'sources/github/owner/repo',
+      baseCommitId: 'abc1234',
+      suggestedCommitMessage: 'feat: add x',
+      fileCount: 1,
+      hasPatch: true,
+    });
+    expect(result.activities[0].artifacts[0].media).toEqual({
+      mimeType: 'image/png',
+      url: undefined,
+      description: 'UI screenshot',
+    });
+  });
+
+  it('getSessionsList falls back to local session ledger when listSessions fails with 503', async () => {
+    (clientMock.listSessions as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Jules API error: Service Unavailable'),
+    );
+    storageMock.listRecentSessions = vi.fn().mockResolvedValue([
+      {
+        id: '6690925633602806498',
+        title: 'Reliability Improvements',
+        state: 'COMPLETED',
+        prompt: 'Improve error handling',
+        repository: 'sources/github/savethepolarbears/jules-mcp-server',
+        created: '2026-06-15T00:00:00Z',
+      },
+    ]);
+
+    const result = JSON.parse(await resources.getSessionsList());
+    expect(result.status).toBe('degraded');
+    expect(result.source).toBe('local_session_ledger');
+    expect(result.count).toBe(1);
+    expect(result.sessions[0].id).toBe('6690925633602806498');
+  });
 });
